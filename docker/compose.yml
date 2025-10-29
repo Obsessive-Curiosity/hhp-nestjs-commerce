@@ -1,0 +1,46 @@
+services:
+  my-nest-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: dev
+    container_name: nest-server
+    image: nest-server:dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ..:/app
+      - /app/node_modules
+    env_file:
+      - ../.env
+    depends_on:
+      my-db-server:
+        condition: service_healthy
+      my-cache-server:
+        condition: service_healthy
+  my-cache-server:
+    container_name: redis-cache
+    image: redis:8.2-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  my-db-server:
+    container_name: mysql-db
+    image: mysql:8.4
+    ports:
+      - "3306:3306"
+    env_file:
+      - ../.env
+    volumes:
+      - ./mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
