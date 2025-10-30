@@ -24,4 +24,4 @@ RUN mkdir -p /app/dist
 
 EXPOSE 3000
 
-CMD ["pnpm", "start:dev"]
+CMD ["pnpm", "docker:dev"]
