@@ -13,8 +13,11 @@ import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
 import { BearerTokenMiddleware } from './auth/middlewares/bearer-token.middleware';
 import { JwtModule } from '@nestjs/jwt';
-import { APP_PIPE } from '@nestjs/core';
+import { APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { ZodValidationPipe } from 'nestjs-zod';
+import { ProductModule } from './product/product.module';
+import { CategoryModule } from './category/category.module';
+import { RbacGuard } from './auth/guards/rbac.guard';
 
 @Module({
   imports: [
@@ -24,6 +27,8 @@ import { ZodValidationPipe } from 'nestjs-zod';
     JwtModule.register({ global: true }),
     AuthModule,
     UserModule,
+    ProductModule,
+    CategoryModule,
   ],
   controllers: [AppController],
   providers: [
@@ -31,6 +36,10 @@ import { ZodValidationPipe } from 'nestjs-zod';
     {
       provide: APP_PIPE,
       useClass: ZodValidationPipe,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RbacGuard,
     },
   ],
 })

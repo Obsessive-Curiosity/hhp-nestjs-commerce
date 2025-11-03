@@ -1,12 +1,12 @@
 enum Role {
-  CUSTOMER // 소비자 (B2C)
+  RETAILER // 소비자 (B2C)
   WHOLESALER // 도매자 (B2B)
   ADMIN // 관리자
 }
 
 model User {
   id       String @id @default(uuid())
-  role     Role   @default(CUSTOMER)
+  role     Role   @default(RETAILER)
   email    String @unique
   password String
   name     String
