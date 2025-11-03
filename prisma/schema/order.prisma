@@ -1,0 +1,64 @@
+enum OrderStatus {
+  PENDING // 결제 대기
+  PAID // 결제 완료
+  SHIPPED // 배송 출발
+  DELIVERED // 배송 완료
+  CANCELLED // 주문 취소
+  FAILED // 결제 실패
+}
+
+enum OrderItemClaimStatus {
+  RETURN_REQUESTED // 반품 요청
+  RETURNED // 반품 완료
+  EXCHANGE_REQUESTED // 교환 요청
+  EXCHANGED // 교환 완료
+}
+
+model Order {
+  id     String      @id @default(uuid())
+  userId String
+  status OrderStatus @default(PENDING)
+
+  // 할인 및 결제 금액 정보
+  orderCouponId  String?
+  basePrice      Int
+  discountAmount Int
+  paymentAmount  Int
+
+  // 배송지 정보 (스냅샷)
+  recipientName   String
+  phone           String
+  zipCode         String
+  address         String
+  addressDetail   String
+  deliveryRequest String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user        User        @relation(fields: [userId], references: [id])
+  orderItems  OrderItem[]
+  orderCoupon UserCoupon? @relation(fields: [orderCouponId], references: [id])
+}
+
+model OrderItem {
+  id        String @id @default(uuid())
+  orderId   String
+  productId String
+
+  // 할인 및 결제 금액 정보
+  orderItemCouponId String?
+  quantity          Int
+  unitPrice         Int
+  discountAmount    Int
+  paymentAmount     Int
+
+  claimStatus OrderItemClaimStatus?
+  createdAt   DateTime              @default(now())
+
+  // Relations
+  order           Order       @relation(fields: [orderId], references: [id])
+  product         Product     @relation(fields: [productId], references: [id])
+  orderItemCoupon UserCoupon? @relation(fields: [orderItemCouponId], references: [id])
+}

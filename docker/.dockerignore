@@ -1,0 +1,36 @@
+# 개발 파일
+node_modules
+dist
+
+# Git
+.git
+.gitignore
+
+# Docker 관련 (컨테이너에 불필요)
+Dockerfile
+.dockerignore
+compose.yml
+docker-compose.yml
+
+# 환경변수
+.env*
+
+# 설정 파일
+.prettierrc
+.eslintrc*
+eslint.config.mjs
+
+# 테스트
+test
+coverage
+
+# 문서
+README.md
+*.md
+
+# 로그
+*.log
+logs
+
+# IDE
+.vscode
