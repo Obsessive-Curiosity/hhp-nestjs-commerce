@@ -32,8 +32,9 @@ model Coupon {
   minPurchaseAmount Int
 
   // 유효기간
-  expiredAt    DateTime?
-  validityDays Int?
+  startAt      DateTime  @default(now()) // 발급 시작일
+  endAt        DateTime? // 발급 종료일
+  validityDays Int? // 사용 가능 일수 (null이면 기간제)
 
   // 수량
   totalQuantity  Int

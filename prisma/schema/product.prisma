@@ -15,8 +15,8 @@ model Product {
   id             String  @id @default(uuid())
   categoryId     Int
   name           String
-  retailPrice    Int
-  wholesalePrice Int
+  retailPrice    Int?
+  wholesalePrice Int?
   description    String  @db.Text
   imageUrl       String?
 
@@ -50,7 +50,12 @@ model ProductPromotion {
   paidQuantity Int
   freeQuantity Int
 
+  // 프로모션 적용 기간
+  startAt DateTime  @default(now()) // 시작일
+  endAt   DateTime? // 종료일 (null이면 무기한)
+
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
   product Product @relation(fields: [productId], references: [id])
