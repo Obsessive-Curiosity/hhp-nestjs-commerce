@@ -3,6 +3,7 @@ import { PrismaService } from '@/prisma/prisma.service';
 import { User as PrismaUser } from '@prisma/client';
 import { User } from '../domain/entity/user.entity';
 import { IUserRepository } from '../domain/interface/user.repository.interface';
+import { assignDirtyFields } from '@/common/utils/repository.utils';
 
 @Injectable()
 export class UserRepository implements IUserRepository {
@@ -17,8 +18,8 @@ export class UserRepository implements IUserRepository {
       password: row.password,
       name: row.name,
       phone: row.phone,
-      createdAt: row.createdAt ?? null,
-      updatedAt: row.updatedAt ?? null,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
       deletedAt: row.deletedAt ?? null,
       lastLoginAt: row.lastLoginAt ?? null,
     });
@@ -33,8 +34,8 @@ export class UserRepository implements IUserRepository {
       password: user.password,
       name: user.name,
       phone: user.phone,
-      createdAt: user.createdAt ?? null,
-      updatedAt: user.updatedAt ?? null,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
       deletedAt: user.deletedAt ?? null,
       lastLoginAt: user.lastLoginAt ?? null,
     };
@@ -72,18 +73,6 @@ export class UserRepository implements IUserRepository {
     return this.toDomain(savedUser);
   }
 
-  private assignDirtyFields<T extends object>(
-    source: T,
-    target: Partial<T>,
-    dirtyFields: (keyof T)[],
-  ) {
-    dirtyFields.forEach((key) => {
-      if (key in source) {
-        target[key] = source[key];
-      }
-    });
-  }
-
   async update(user: User): Promise<User> {
     const dirtyFields = user.getDirtyFields();
 
@@ -96,7 +85,7 @@ export class UserRepository implements IUserRepository {
     const fullData = this.fromDomain(user);
     const updateData: Partial<PrismaUser> = {};
 
-    this.assignDirtyFields(fullData, updateData, [
+    assignDirtyFields(fullData, updateData, [
       ...dirtyFields,
     ] as (keyof PrismaUser)[]);
 

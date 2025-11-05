@@ -17,7 +17,7 @@ import { APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { CategoryModule } from '@/category/category.module';
 import { RbacGuard } from '@/auth/guards/rbac.guard';
-import { ProductModule } from '@/product/product.module';
+import { ProductModule } from '@/product/infrastructure/product.module';
 
 @Module({
   imports: [
