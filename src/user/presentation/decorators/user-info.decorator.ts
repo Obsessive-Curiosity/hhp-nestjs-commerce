@@ -1,6 +1,6 @@
-import { Public } from '../../auth/decorators/public.decorator';
-import { UnauthorizedErrorCode } from '../../auth/constants/error-responses.constant';
-import { UnauthorizedException } from '../../auth/exceptions/unauthorized.exception';
+import { Public } from '@/auth/decorators/public.decorator';
+import { UnauthorizedErrorCode } from '@/auth/constants/error-responses.constant';
+import { UnauthorizedException } from '@/auth/exceptions/unauthorized.exception';
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Request as Req } from 'express';
