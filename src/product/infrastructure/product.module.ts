@@ -35,6 +35,6 @@ import { StockRepository } from './stock.repository';
     // Application Facade
     ProductFacadeService,
   ],
-  exports: [ProductFacadeService, StockService],
+  exports: [ProductService, StockService],
 })
 export class ProductModule {}

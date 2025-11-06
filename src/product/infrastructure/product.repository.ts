@@ -8,14 +8,11 @@ import {
   ProductIncludeOptions,
 } from '../domain/interface/product.repository.interface';
 import { assignDirtyFields } from '@/common/utils/repository.utils';
-import { ProductService } from '../domain/service/product.service';
+import { getRolePermissions } from '../domain/utils/role-permissions.utils';
 
 @Injectable()
 export class ProductRepository implements IProductRepository {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly productService: ProductService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   // read: DB → Entity
   private toDomain(row: PrismaProduct): Product {
@@ -54,7 +51,7 @@ export class ProductRepository implements IProductRepository {
     if (!options) return undefined;
 
     const { userRole, includeCategory, includeStock } = options;
-    const { isB2C, isB2B } = this.productService.getRolePermissions(userRole);
+    const { isB2C, isB2B } = getRolePermissions(userRole);
 
     return {
       category: includeCategory ?? false,

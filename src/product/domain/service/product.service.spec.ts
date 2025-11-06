@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { NotFoundException } from '@nestjs/common';
 import { ProductService } from './product.service';
 import {
   IProductRepository,
@@ -312,15 +313,14 @@ describe('ProductService', () => {
       });
     });
 
-    it('상품이 존재하지 않으면 null을 반환한다', async () => {
+    it('상품이 존재하지 않으면 NotFoundException을 던진다', async () => {
       // Given
       mockRepository.findById.mockResolvedValue(null);
 
-      // When
-      const result = await service.findProductById('non-existent-id');
-
-      // Then
-      expect(result).toBeNull();
+      // When & Then
+      await expect(service.findProductById('non-existent-id')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -359,6 +359,30 @@ describe('ProductService', () => {
       // Then
       expect(result.isB2C).toBe(true);
       expect(result.isB2B).toBe(false);
+    });
+  });
+
+  describe('checkExistProduct', () => {
+    it('상품이 존재하면 예외를 발생시키지 않는다', async () => {
+      // Given
+      const productId = 'test-product-id';
+      mockRepository.existsById.mockResolvedValue(true);
+
+      // When & Then
+      await expect(service.checkExistProduct(productId)).resolves.not.toThrow();
+      expect(mockRepository.existsById).toHaveBeenCalledWith(productId);
+    });
+
+    it('상품이 존재하지 않으면 NotFoundException을 발생시킨다', async () => {
+      // Given
+      const productId = 'non-existent-product-id';
+      mockRepository.existsById.mockResolvedValue(false);
+
+      // When & Then
+      await expect(service.checkExistProduct(productId)).rejects.toThrow(
+        `ID ${productId}인 상품을 찾을 수 없습니다.`,
+      );
+      expect(mockRepository.existsById).toHaveBeenCalledWith(productId);
     });
   });
 });

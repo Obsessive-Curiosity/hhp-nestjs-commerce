@@ -18,6 +18,8 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import { CategoryModule } from '@/category/category.module';
 import { RbacGuard } from '@/auth/guards/rbac.guard';
 import { ProductModule } from '@/product/infrastructure/product.module';
+import { CartModule } from '@/cart/infrastructure/cart.module';
+import { CouponModule } from '@/coupon/infrastructure/coupon.module';
 
 @Module({
   imports: [
@@ -29,6 +31,8 @@ import { ProductModule } from '@/product/infrastructure/product.module';
     UserModule,
     CategoryModule,
     ProductModule,
+    CouponModule,
+    CartModule,
   ],
   controllers: [AppController],
   providers: [
