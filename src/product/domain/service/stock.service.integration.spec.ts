@@ -5,6 +5,7 @@ import {
   STOCK_REPOSITORY,
 } from '../interface/stock.repository.interface';
 import { ProductStock } from '../entity/product-stock.entity';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 
 describe('StockService Integration Tests - Concurrency', () => {
   let service: StockService;
@@ -39,7 +40,7 @@ describe('StockService Integration Tests - Concurrency', () => {
   });
 
   describe('재고 증가 동시성 테스트', () => {
-    it('여러 요청이 동시에 재고를 증가시킬 때 낙관적 락으로 순차적으로 처리된다', async () => {
+    it('여러 요청이 동시에 재고를 증가시킬 때 서비스의 재시도 로직으로 처리된다', async () => {
       // Given
       const productId = 'test-product-id';
       const initialQuantity = 100;
@@ -65,7 +66,9 @@ describe('StockService Integration Tests - Concurrency', () => {
           // 낙관적 락 시뮬레이션: version이 맞지 않으면 실패
           if (version !== currentVersion) {
             return Promise.reject(
-              new Error('낙관적 락 충돌: 버전이 일치하지 않습니다.'),
+              new ConflictException(
+                '재고 증가 실패: 다른 트랜잭션에 의해 변경되었습니다. 다시 시도해주세요.',
+              ),
             );
           }
 
@@ -76,41 +79,14 @@ describe('StockService Integration Tests - Concurrency', () => {
         },
       );
 
-      // When - 동시에 10개의 재고 증가 요청
+      // When - 동시에 10개의 재고 증가 요청 (서비스의 재시도 로직 사용)
       const concurrentRequests = 10;
       const increaseAmount = 5;
       const promises: Promise<void>[] = [];
 
       for (let i = 0; i < concurrentRequests; i++) {
-        const promise = (async () => {
-          let success = false;
-          let retries = 0;
-          const maxRetries = 10;
-
-          while (!success && retries < maxRetries) {
-            try {
-              await service.increaseStock(productId, increaseAmount);
-              success = true;
-            } catch (error) {
-              // 낙관적 락 충돌 시 재시도
-              if (
-                error instanceof Error &&
-                error.message.includes('낙관적 락 충돌')
-              ) {
-                retries++;
-                await new Promise((resolve) => setTimeout(resolve, 10));
-              } else {
-                throw error;
-              }
-            }
-          }
-
-          if (!success) {
-            throw new Error('최대 재시도 횟수 초과');
-          }
-        })();
-
-        promises.push(promise);
+        // 서비스가 내부적으로 재시도 처리
+        promises.push(service.increaseStock(productId, increaseAmount));
       }
 
       // 모든 요청이 완료될 때까지 대기
@@ -131,7 +107,7 @@ describe('StockService Integration Tests - Concurrency', () => {
       ).toBeGreaterThanOrEqual(concurrentRequests);
     });
 
-    it('재고 증가 시 낙관적 락 충돌이 발생하면 재시도를 통해 처리된다', async () => {
+    it('재고 증가 시 낙관적 락 충돌이 발생하면 서비스가 자동으로 재시도한다', async () => {
       // Given
       const productId = 'test-product-id';
       const initialStock = ProductStock.create(productId, 100);
@@ -143,42 +119,25 @@ describe('StockService Integration Tests - Concurrency', () => {
         // 처음 2번은 실패, 3번째에 성공
         if (attemptCount < 3) {
           return Promise.reject(
-            new Error('낙관적 락 충돌: 버전이 일치하지 않습니다.'),
+            new ConflictException(
+              '재고 증가 실패: 다른 트랜잭션에 의해 변경되었습니다. 다시 시도해주세요.',
+            ),
           );
         }
         return Promise.resolve();
       });
 
-      // When
-      let success = false;
-      let retries = 0;
-      const maxRetries = 5;
-
-      while (!success && retries < maxRetries) {
-        try {
-          await service.increaseStock(productId, 10);
-          success = true;
-        } catch (error) {
-          if (
-            error instanceof Error &&
-            error.message.includes('낙관적 락 충돌')
-          ) {
-            retries++;
-          } else {
-            throw error;
-          }
-        }
-      }
+      // When - 서비스가 내부적으로 재시도 처리
+      await service.increaseStock(productId, 10);
 
       // Then
-      expect(success).toBe(true);
       expect(attemptCount).toBe(3); // 2번 실패 후 3번째 성공
       expect(mockRepository.increaseWithVersion).toHaveBeenCalledTimes(3);
     });
   });
 
   describe('재고 감소 동시성 테스트', () => {
-    it('여러 요청이 동시에 재고를 감소시킬 때 낙관적 락으로 순차적으로 처리된다', async () => {
+    it('여러 요청이 동시에 재고를 감소시킬 때 서비스의 재시도 로직으로 처리된다', async () => {
       // Given
       const productId = 'test-product-id';
       const initialQuantity = 1000;
@@ -206,14 +165,16 @@ describe('StockService Integration Tests - Concurrency', () => {
           // 낙관적 락 시뮬레이션: version이 맞지 않으면 실패
           if (version !== currentVersion) {
             return Promise.reject(
-              new Error('낙관적 락 충돌: 버전이 일치하지 않습니다.'),
+              new ConflictException(
+                '재고 감소 실패: 재고가 부족하거나 다른 트랜잭션에 의해 변경되었습니다.',
+              ),
             );
           }
 
           // 재고 부족 체크
           if (currentQuantity < quantity) {
             return Promise.reject(
-              new Error(
+              new BadRequestException(
                 `재고가 부족합니다. 현재 재고: ${currentQuantity}, 요청 수량: ${quantity}`,
               ),
             );
@@ -226,41 +187,14 @@ describe('StockService Integration Tests - Concurrency', () => {
         },
       );
 
-      // When - 동시에 20개의 재고 감소 요청
+      // When - 동시에 20개의 재고 감소 요청 (서비스의 재시도 로직 사용)
       const concurrentRequests = 20;
       const decreaseAmount = 10;
       const promises: Promise<void>[] = [];
 
       for (let i = 0; i < concurrentRequests; i++) {
-        const promise = (async () => {
-          let success = false;
-          let retries = 0;
-          const maxRetries = 20;
-
-          while (!success && retries < maxRetries) {
-            try {
-              await service.decreaseStock(productId, decreaseAmount);
-              success = true;
-            } catch (error) {
-              // 낙관적 락 충돌 시 재시도
-              if (
-                error instanceof Error &&
-                error.message.includes('낙관적 락 충돌')
-              ) {
-                retries++;
-                await new Promise((resolve) => setTimeout(resolve, 10));
-              } else {
-                throw error;
-              }
-            }
-          }
-
-          if (!success) {
-            throw new Error('최대 재시도 횟수 초과');
-          }
-        })();
-
-        promises.push(promise);
+        // 서비스가 내부적으로 재시도 처리
+        promises.push(service.decreaseStock(productId, decreaseAmount));
       }
 
       // 모든 요청이 완료될 때까지 대기
@@ -289,7 +223,7 @@ describe('StockService Integration Tests - Concurrency', () => {
 
       mockRepository.findByProductId.mockResolvedValue(stock);
       mockRepository.decreaseWithVersion.mockRejectedValue(
-        new Error(
+        new BadRequestException(
           `재고가 부족합니다. 현재 재고: ${currentQuantity}, 요청 수량: 100`,
         ),
       );
@@ -327,12 +261,14 @@ describe('StockService Integration Tests - Concurrency', () => {
         (_id, quantity, version) => {
           if (version !== currentVersion) {
             return Promise.reject(
-              new Error('낙관적 락 충돌: 버전이 일치하지 않습니다.'),
+              new ConflictException(
+                '재고 감소 실패: 재고가 부족하거나 다른 트랜잭션에 의해 변경되었습니다.',
+              ),
             );
           }
 
           if (currentQuantity < quantity) {
-            return Promise.reject(new Error('재고가 부족합니다'));
+            return Promise.reject(new BadRequestException('재고가 부족합니다'));
           }
 
           currentQuantity -= quantity;
@@ -341,37 +277,13 @@ describe('StockService Integration Tests - Concurrency', () => {
         },
       );
 
-      // When - 재고보다 많은 요청을 동시에 처리
+      // When - 재고보다 많은 요청을 동시에 처리 (서비스의 재시도 로직 사용)
       const concurrentRequests = 15; // 100 / 10 = 10개만 성공 가능
       const decreaseAmount = 10;
       const results = await Promise.allSettled(
-        Array.from({ length: concurrentRequests }, async () => {
-          let success = false;
-          let retries = 0;
-          const maxRetries = 10;
-
-          while (!success && retries < maxRetries) {
-            try {
-              await service.decreaseStock(productId, decreaseAmount);
-              success = true;
-            } catch (error) {
-              if (
-                error instanceof Error &&
-                error.message.includes('낙관적 락 충돌')
-              ) {
-                retries++;
-                await new Promise((resolve) => setTimeout(resolve, 10));
-              } else if (
-                error instanceof Error &&
-                error.message.includes('재고가 부족합니다')
-              ) {
-                throw error; // 재고 부족은 재시도하지 않음
-              } else {
-                throw error;
-              }
-            }
-          }
-        }),
+        Array.from({ length: concurrentRequests }, () =>
+          service.decreaseStock(productId, decreaseAmount),
+        ),
       );
 
       // Then
@@ -388,7 +300,7 @@ describe('StockService Integration Tests - Concurrency', () => {
   });
 
   describe('재고 증가/감소 혼합 동시성 테스트', () => {
-    it('재고 증가와 감소가 동시에 발생해도 정확하게 처리된다', async () => {
+    it('재고 증가와 감소가 동시에 발생해도 서비스의 재시도 로직으로 정확하게 처리된다', async () => {
       // Given
       const productId = 'test-product-id';
       const initialQuantity = 500;
@@ -412,7 +324,9 @@ describe('StockService Integration Tests - Concurrency', () => {
         (_id, quantity, version) => {
           if (version !== currentVersion) {
             return Promise.reject(
-              new Error('낙관적 락 충돌: 버전이 일치하지 않습니다.'),
+              new ConflictException(
+                '재고 증가 실패: 다른 트랜잭션에 의해 변경되었습니다. 다시 시도해주세요.',
+              ),
             );
           }
           currentQuantity += quantity;
@@ -425,11 +339,13 @@ describe('StockService Integration Tests - Concurrency', () => {
         (_id, quantity, version) => {
           if (version !== currentVersion) {
             return Promise.reject(
-              new Error('낙관적 락 충돌: 버전이 일치하지 않습니다.'),
+              new ConflictException(
+                '재고 감소 실패: 재고가 부족하거나 다른 트랜잭션에 의해 변경되었습니다.',
+              ),
             );
           }
           if (currentQuantity < quantity) {
-            return Promise.reject(new Error('재고가 부족합니다'));
+            return Promise.reject(new BadRequestException('재고가 부족합니다'));
           }
           currentQuantity -= quantity;
           currentVersion += 1;
@@ -437,7 +353,7 @@ describe('StockService Integration Tests - Concurrency', () => {
         },
       );
 
-      // When - 증가 10번, 감소 10번을 동시에 실행
+      // When - 증가 10번, 감소 10번을 동시에 실행 (서비스의 재시도 로직 사용)
       const increaseRequests = 10;
       const decreaseRequests = 10;
       const amount = 20;
@@ -446,54 +362,12 @@ describe('StockService Integration Tests - Concurrency', () => {
 
       // 증가 요청
       for (let i = 0; i < increaseRequests; i++) {
-        promises.push(
-          (async () => {
-            let success = false;
-            let retries = 0;
-            while (!success && retries < 20) {
-              try {
-                await service.increaseStock(productId, amount);
-                success = true;
-              } catch (error) {
-                if (
-                  error instanceof Error &&
-                  error.message.includes('낙관적 락 충돌')
-                ) {
-                  retries++;
-                  await new Promise((resolve) => setTimeout(resolve, 10));
-                } else {
-                  throw error;
-                }
-              }
-            }
-          })(),
-        );
+        promises.push(service.increaseStock(productId, amount));
       }
 
       // 감소 요청
       for (let i = 0; i < decreaseRequests; i++) {
-        promises.push(
-          (async () => {
-            let success = false;
-            let retries = 0;
-            while (!success && retries < 20) {
-              try {
-                await service.decreaseStock(productId, amount);
-                success = true;
-              } catch (error) {
-                if (
-                  error instanceof Error &&
-                  error.message.includes('낙관적 락 충돌')
-                ) {
-                  retries++;
-                  await new Promise((resolve) => setTimeout(resolve, 10));
-                } else {
-                  throw error;
-                }
-              }
-            }
-          })(),
-        );
+        promises.push(service.decreaseStock(productId, amount));
       }
 
       await Promise.all(promises);

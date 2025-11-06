@@ -3,8 +3,11 @@ import { UserFacadeService as UserService } from '../application/user.facade';
 import { UserInfo } from './decorators/user-info.decorator';
 import { Payload } from '@/types/express';
 import type { UpdateUserDto } from './dto/update-user.dto';
+import { RBAC } from '@/auth/decorators/rbac.decorator';
+import { Role } from '@prisma/client';
 
-@Controller('users')
+@RBAC([Role.RETAILER, Role.WHOLESALER])
+@Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}
 

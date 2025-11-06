@@ -20,6 +20,7 @@ import { RbacGuard } from '@/auth/guards/rbac.guard';
 import { ProductModule } from '@/product/infrastructure/product.module';
 import { CartModule } from '@/cart/infrastructure/cart.module';
 import { CouponModule } from '@/coupon/infrastructure/coupon.module';
+import { PointModule } from '@/point/infrastructure/point.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { CouponModule } from '@/coupon/infrastructure/coupon.module';
     ProductModule,
     CouponModule,
     CartModule,
+    PointModule,
   ],
   controllers: [AppController],
   providers: [
