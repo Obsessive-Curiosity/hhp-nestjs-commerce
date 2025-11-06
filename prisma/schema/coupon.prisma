@@ -4,7 +4,7 @@ enum CouponType {
 }
 
 enum CouponScope {
-  ALL // 전체 주문 (여러 개 가능, 분배)
+  ORDER // 전체 주문 (주문당 1개)
   CATEGORY // 카테고리 (OrderItem당 1개)
   PRODUCT // 특정 상품 (OrderItem당 1개)
 }
@@ -28,27 +28,29 @@ model Coupon {
   discountRate      Int?
   maxDiscountAmount Int?
 
-  // 공통
-  minPurchaseAmount Int
+  // 공통 (ORDER scope일 때만 필수)
+  minPurchaseAmount Int?
 
   // 유효기간
-  startAt      DateTime  @default(now()) // 발급 시작일
-  endAt        DateTime? // 발급 종료일
+  startAt DateTime  @default(now()) // 발급 시작일
+  endAt   DateTime? // 발급 종료일
+
+  // 기간제
   validityDays Int? // 사용 가능 일수 (null이면 기간제)
 
-  // 수량
-  totalQuantity  Int
-  issuedQuantity Int @default(0)
+  // 수량 (null = 무제한)
+  totalQuantity  Int?
+  issuedQuantity Int  @default(0)
 
   createdAt DateTime @default(now())
 
   // Relations
   userCoupons UserCoupon[]
-  categories  CouponCategory[]
-  products    CouponProduct[]
+  categories  CategoryCoupon[]
+  products    ProductCoupon[]
 }
 
-model CouponCategory {
+model CategoryCoupon {
   couponId   String
   categoryId Int
 
@@ -60,7 +62,7 @@ model CouponCategory {
   @@index([categoryId])
 }
 
-model CouponProduct {
+model ProductCoupon {
   couponId  String
   productId String
 
