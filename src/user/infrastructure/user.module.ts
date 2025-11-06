@@ -6,9 +6,10 @@ import { UserService } from '../domain/service/user.service';
 import { UserFacadeService } from '../application/user.facade';
 import { USER_REPOSITORY } from '../domain/interface/user.repository.interface';
 import { PasswordService } from '../domain/service/password.service';
+import { PointModule } from '@/point/infrastructure/point.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, PointModule],
   controllers: [UserController],
   providers: [
     UserFacadeService,
@@ -19,6 +20,6 @@ import { PasswordService } from '../domain/service/password.service';
       useClass: UserRepository,
     },
   ],
-  exports: [UserService, UserFacadeService],
+  exports: [UserService],
 })
 export class UserModule {}

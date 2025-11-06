@@ -1,14 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import { UserService } from '../domain/service/user.service';
 import { UpdateUserDto } from '../presentation/dto';
+import { PointService } from '@/point/domain/service/point.service';
 
 @Injectable()
 export class UserFacadeService {
-  constructor(private readonly userService: UserService) {}
+  constructor(
+    private readonly userService: UserService,
+    private readonly pointService: PointService,
+  ) {}
 
   // 내 정보 조회
   async getMyInfo(userId: string) {
     const user = await this.userService.getUserById(userId);
+    const pointBalance = await this.pointService.getBalance(userId);
 
     return {
       id: user.id,
@@ -16,6 +21,7 @@ export class UserFacadeService {
       name: user.name,
       phone: user.phone,
       role: user.role,
+      point: pointBalance,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
