@@ -8,7 +8,7 @@ model Category {
 
   // Relations
   products Product[]
-  coupons  CouponCategory[]
+  coupons  CategoryCoupon[]
 }
 
 model Product {
@@ -29,7 +29,7 @@ model Product {
   stock      ProductStock?
   promotions ProductPromotion[]
   orderItems OrderItem[]
-  coupons    CouponProduct[]
+  coupons    ProductCoupon[]
 }
 
 model ProductStock {
