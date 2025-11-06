@@ -1,4 +1,9 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { ProductStock } from '../entity/product-stock.entity';
 import {
   IStockRepository,
@@ -95,5 +100,16 @@ export class StockService {
     }
 
     return stock.isOutOfStock();
+  }
+
+  // 재고 확인 및 예외 처리
+  async checkStock(productId: string, quantity: number) {
+    const stock = await this.getStock(productId);
+    if (!stock.hasStock(quantity)) {
+      throw new BadRequestException(
+        `재고가 부족합니다. (요청: ${quantity}, 재고: ${stock.quantity})`,
+      );
+    }
+    return true;
   }
 }

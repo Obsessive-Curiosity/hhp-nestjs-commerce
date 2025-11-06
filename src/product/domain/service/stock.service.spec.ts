@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { StockService } from './stock.service';
 import {
   IStockRepository,
@@ -309,6 +309,53 @@ describe('StockService', () => {
 
       // Then
       expect(result).toBe(true);
+    });
+  });
+
+  describe('checkStock', () => {
+    it('재고가 충분하면 true를 반환한다', async () => {
+      // Given
+      const productId = 'test-product-id';
+      const stock = ProductStock.create(productId, 100);
+      const quantity = 50;
+
+      mockRepository.findByProductId.mockResolvedValue(stock);
+
+      // When
+      const result = await service.checkStock(productId, quantity);
+
+      // Then
+      expect(result).toBe(true);
+      expect(mockRepository.findByProductId).toHaveBeenCalledWith(productId);
+    });
+
+    it('재고가 부족하면 BadRequestException을 발생시킨다', async () => {
+      // Given
+      const productId = 'test-product-id';
+      const stock = ProductStock.create(productId, 50);
+      const quantity = 100;
+
+      mockRepository.findByProductId.mockResolvedValue(stock);
+
+      // When & Then
+      await expect(service.checkStock(productId, quantity)).rejects.toThrow(
+        `재고가 부족합니다. (요청: ${quantity}, 재고: ${stock.quantity})`,
+      );
+      expect(mockRepository.findByProductId).toHaveBeenCalledWith(productId);
+    });
+
+    it('재고가 존재하지 않으면 NotFoundException을 발생시킨다', async () => {
+      // Given
+      const productId = 'non-existent-product-id';
+      mockRepository.findByProductId.mockResolvedValue(null);
+
+      // When & Then
+      await expect(service.checkStock(productId, 10)).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(service.checkStock(productId, 10)).rejects.toThrow(
+        `상품 ID ${productId}의 재고를 찾을 수 없습니다.`,
+      );
     });
   });
 });
