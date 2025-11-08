@@ -10,7 +10,7 @@ import { JwtConfigValidator } from '../config/validators/jwt-config.validator';
 import { PrismaService } from '../prisma/prisma.service';
 import { Payload } from '../types/express';
 import { Prisma } from '@prisma/client';
-import { UserService } from 'src/user/user.service';
+import { UserService } from '@/user/domain/service/user.service';
 
 @Injectable()
 export class AuthService {

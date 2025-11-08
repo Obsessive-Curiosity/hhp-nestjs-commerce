@@ -12,9 +12,14 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
-    "docker:dev": "npx prisma generate && npx prisma db push && nest start --watch",
+    "docker:dev": "npx prisma generate && npx prisma db push --accept-data-loss && nest start --watch",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
+    "test:user": "jest src/user",
+    "test:product": "jest src/product",
+    "test:coupon": "jest src/coupon",
+    "test:cart": "jest src/cart",
+    "test:point": "jest src/point",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
@@ -92,6 +97,9 @@
       "**/*.(t|j)s"
     ],
     "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "moduleNameMapper": {
+      "^@/(.*)$": "<rootDir>/$1"
+    }
   }
 }
