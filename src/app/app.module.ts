@@ -22,12 +22,14 @@ import { CartModule } from '@/cart/infrastructure/cart.module';
 import { CouponModule } from '@/coupon/infrastructure/coupon.module';
 import { PointModule } from '@/point/infrastructure/point.module';
 import { OrderModule } from '@/order/infrastructure/order.module';
+import { MikroOrmModule } from '@/mikro-orm/mikro-orm.module';
 
 @Module({
   imports: [
     ConfigModule,
-    PrismaModule,
     RedisModule,
+    MikroOrmModule,
+    PrismaModule,
     JwtModule.register({ global: true }),
     AuthModule,
     UserModule,
