@@ -1,6 +1,12 @@
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 import { User } from '../entity/user.entity';
-import { UpdateUserDto } from '../../presentation/dto';
+import { CreateUserProps, UpdateUserProps } from '../types';
 import {
   IUserRepository,
   USER_REPOSITORY,
@@ -15,7 +21,58 @@ export class UserService {
     private readonly passwordService: PasswordService,
   ) {}
 
-  // 로그인 기록 업데이트
+  // ==================== 조회 (Query) ====================
+
+  // ID로 사용자 조회
+  async getUserById(userId: string): Promise<User> {
+    const user = await this.userRepository.findById(userId);
+
+    if (!user) {
+      throw new NotFoundException('사용자를 찾을 수 없습니다.');
+    }
+
+    return user;
+  }
+
+  // 이메일로 사용자 존재 여부 확인
+  async existsUser(email: string): Promise<boolean> {
+    const user = await this.userRepository.findByEmail(email);
+    return !!user;
+  }
+
+  // ==================== 생성 (Create) ====================
+
+  // 사용자 생성
+  async createUser(props: CreateUserProps): Promise<User> {
+    const { role, email, password, name, phone, companyPhone } = props;
+
+    // 1. 이메일 중복 체크
+    const existingUser = await this.userRepository.findByEmail(email);
+    if (existingUser) {
+      throw new ConflictException('이미 사용 중인 이메일입니다.');
+    }
+
+    // 2. 비밀번호 해싱
+    const hashedPassword = await this.passwordService.hash(password);
+
+    // 3. 사용자 엔티티 생성
+    const user = User.create({
+      role,
+      email,
+      password: hashedPassword,
+      name,
+      personalPhone: { number: phone },
+      companyPhone: companyPhone ? { number: companyPhone } : undefined,
+    });
+
+    // 4. 저장
+    const createdUser = await this.userRepository.create(user);
+    return createdUser;
+  }
+
+  // ==================== 수정 (Update) ====================
+
+  // 로그인 기록
   async recordLogin(userId: string): Promise<void> {
     if (!userId) return;
 
@@ -28,40 +85,45 @@ export class UserService {
     await this.userRepository.update(user);
   }
 
-  // 사용자 정보 조회
-  async getUserById(userId: string): Promise<User> {
+  // 사용자 정보 수정
+  async updateUser(userId: string, props: UpdateUserProps): Promise<User> {
     const user = await this.userRepository.findById(userId);
 
     if (!user) {
       throw new NotFoundException('사용자를 찾을 수 없습니다.');
     }
 
-    return user;
-  }
+    const { name, personalPhone, companyPhone, currentPassword, newPassword } =
+      props;
 
-  // 사용자 정보 업데이트
-  async updateUserInfo(userId: string, data: UpdateUserDto): Promise<User> {
-    const user = await this.userRepository.findById(userId);
-
-    if (!user) {
-      throw new NotFoundException('사용자를 찾을 수 없습니다.');
+    if (name || personalPhone || companyPhone) {
+      user.updateInfo({ name, personalPhone, companyPhone });
     }
 
-    // 기본 정보 업데이트 (name, phone이 있을 때만)
-    if (data.name !== undefined || data.phone !== undefined) {
-      user.updateInfo(data.name, data.phone);
-    }
+    if (newPassword && currentPassword) {
+      // 1. 현재 비밀번호 검증
+      const isCurrentPasswordValid = await this.passwordService.verify(
+        currentPassword,
+        user.password,
+      );
 
-    // 비밀번호 업데이트
-    if (data.password) {
-      const hashedPassword = await this.passwordService.hash(data.password); // 비밀번호 해싱
+      if (!isCurrentPasswordValid) {
+        throw new BadRequestException('현재 비밀번호가 일치하지 않습니다.');
+      }
+
+      // 2. 새 비밀번호 해싱
+      const hashedPassword = await this.passwordService.hash(newPassword);
+
+      // 3. 비밀번호 업데이트
       user.updatePassword(hashedPassword);
     }
 
     return await this.userRepository.update(user);
   }
 
-  // 사용자 계정 삭제 (Soft Delete)
+  // ==================== 삭제 (Delete) ====================
+
+  // 사용자 삭제 (Soft Delete)
   async deleteUser(userId: string): Promise<void> {
     const user = await this.userRepository.findById(userId);
 
@@ -69,13 +131,10 @@ export class UserService {
       throw new NotFoundException('사용자를 찾을 수 없습니다.');
     }
 
-    user.delete();
-    await this.userRepository.update(user);
-  }
+    if (user.isDeleted()) {
+      throw new ConflictException('이미 삭제된 사용자입니다.');
+    }
 
-  // 이메일 중복 확인
-  async isEmailDuplicated(email: string): Promise<boolean> {
-    const user = await this.userRepository.findByEmail(email);
-    return user !== null;
+    await this.userRepository.softDelete(userId);
   }
 }

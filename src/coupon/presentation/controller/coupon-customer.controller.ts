@@ -1,14 +1,15 @@
 import { Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { UserInfo } from '@/user/presentation/decorators/user-info.decorator';
 import { RBAC } from '@/auth/decorators/rbac.decorator';
-import { Role, CouponStatus } from '@prisma/client';
+import { CouponStatus } from '@/coupon/domain/entity/user-coupon.entity';
+import { Role } from '@/user/domain/entity/user.entity';
 import { Payload } from '@/types/express';
-import { CouponFacadeService } from '@/coupon/application/coupon.facade';
+import { CouponFacade } from '@/coupon/application/coupon.facade';
 
 @RBAC([Role.RETAILER])
 @Controller('coupon')
 export class CouponCustomerController {
-  constructor(private readonly couponFacade: CouponFacadeService) {}
+  constructor(private readonly couponFacade: CouponFacade) {}
 
   // 발급 가능한 쿠폰 목록 조회
   @Get()

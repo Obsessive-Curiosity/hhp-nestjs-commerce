@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Patch } from '@nestjs/common';
 import { RBAC } from '@/auth/decorators/rbac.decorator';
-import { Role } from '@prisma/client';
+import { Role } from '@/user/domain/entity/user.entity';
 import { OrderFacade } from '@/order/application/order.facade';
 import { UpdateOrderStatusDto } from '../dto';
 

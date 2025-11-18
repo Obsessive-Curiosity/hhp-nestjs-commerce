@@ -1,75 +1,37 @@
 import {
   Injectable,
-  ConflictException,
   BadRequestException,
   NotFoundException,
+  Inject,
 } from '@nestjs/common';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
 import { JwtConfigValidator } from '../config/validators/jwt-config.validator';
-import { PrismaService } from '../prisma/prisma.service';
 import { Payload } from '../types/express';
-import { Prisma } from '@prisma/client';
+import { SignupDto } from './dto/signup.dto';
+import { UserFacade } from '@/user/application/user.facade';
 import { UserService } from '@/user/domain/service/user.service';
+import { PasswordService } from '@/user/domain/service/password.service';
+import {
+  IUserRepository,
+  USER_REPOSITORY,
+} from '@/user/domain/interface/user.repository.interface';
 
 @Injectable()
 export class AuthService {
   constructor(
-    private readonly prisma: PrismaService,
+    @Inject(USER_REPOSITORY)
+    private readonly userRepository: IUserRepository,
     private readonly jwtService: JwtService,
     private readonly jwtConfig: JwtConfigValidator,
+    private readonly userFacade: UserFacade,
     private readonly userService: UserService,
+    private readonly passwordService: PasswordService,
   ) {}
 
-  async signup(dto: Prisma.UserCreateInput) {
-    const { role, email, password, name, phone } = dto;
-    const createDto = { role, email, password, name, phone };
-
-    // 이메일 중복 체크
-    const existingUser = await this.prisma.user.findFirst({
-      where: { email, role, deletedAt: null },
-    });
-
-    if (existingUser) {
-      throw new ConflictException('이미 사용 중인 이메일입니다.');
-    }
-
-    // 비밀번호 해싱
-    const salt = await bcrypt.genSalt();
-    const hashedPassword = await bcrypt.hash(password, salt);
-
-    // 사용자 생성 (Point도 함께 생성)
-    const user = await this.prisma.$transaction(async (tx) => {
-      const newUser = await tx.user.create({
-        data: {
-          ...createDto,
-          password: hashedPassword,
-        },
-        select: {
-          id: true,
-          role: true,
-          email: true,
-          name: true,
-          phone: true,
-          createdAt: true,
-        },
-      });
-
-      // 포인트 초기화
-      await tx.point.create({
-        data: {
-          userId: newUser.id,
-          amount: 0,
-        },
-      });
-
-      return newUser;
-    });
-
-    return {
-      message: '회원가입이 완료되었습니다.',
-      user,
-    };
+  // 회원가입
+  async signup(dto: SignupDto) {
+    // UserFacade에 위임 (사용자 생성 + 지갑 초기화)
+    return await this.userFacade.createMyAccount(dto);
   }
 
   async login(user: Payload | undefined) {
@@ -88,15 +50,14 @@ export class AuthService {
   }
 
   async authenticate(email: string, password: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { email, deletedAt: null },
-    });
+    const user = await this.userRepository.findByEmail(email);
 
-    if (!user) {
+    if (!user || user.isDeleted()) {
       throw new BadRequestException('잘못된 로그인 정보 입니다!');
     }
 
-    const passOK = await bcrypt.compare(password, user.password);
+    // 비밀번호 검증 (PasswordService 활용)
+    const passOK = await this.passwordService.verify(password, user.password);
 
     if (!passOK) {
       throw new BadRequestException('잘못된 로그인 정보 입니다!');

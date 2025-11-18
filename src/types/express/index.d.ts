@@ -1,4 +1,4 @@
-import { Role } from '@prisma/client';
+import { Role } from '@/user/domain/entity/user.entity';
 import { JwtPayload } from 'jsonwebtoken';
 
 declare global {

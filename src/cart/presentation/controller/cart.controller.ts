@@ -7,7 +7,7 @@ import {
   Body,
   Param,
 } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { Role } from '@/user/domain/entity/user.entity';
 import { RBAC } from '@/auth/decorators/rbac.decorator';
 import { UserInfo } from '@/user/presentation/decorators/user-info.decorator';
 import { Payload } from '@/types/express';

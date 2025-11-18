@@ -10,20 +10,20 @@ import { ORDER_ITEM_REPOSITORY } from '../domain/interface/order-item.repository
 import { OrderRepository } from './order.repository';
 import { OrderItemRepository } from './order-item.repository';
 import { ProductModule } from '@/product/infrastructure/product.module';
-import { PointModule } from '@/point/infrastructure/point.module';
+import { WalletModule } from '@/wallet/infrastructure/wallet.module';
 import { CartModule } from '@/cart/infrastructure/cart.module';
-import { PrismaModule } from '@/prisma/prisma.module';
+import { UserModule } from '@/user/infrastructure/user.module';
 // Use Cases
-import { CreateOrderUseCase } from '../application/usecase/create-order.usecase';
-import { ProcessPaymentUseCase } from '../application/usecase/process-payment.usecase';
-import { CancelOrderUseCase } from '../application/usecase/cancel-order.usecase';
+import { CreateOrderUseCase } from '../application/cross-domain/create-order.usecase';
+import { ProcessPaymentUseCase } from '../application/cross-domain/process-payment.usecase';
+import { CancelOrderUseCase } from '../application/cross-domain/cancel-order.usecase';
 
 @Module({
   imports: [
-    PrismaModule,
     ProductModule, // ProductService, StockService
-    PointModule,   // PointService
+    WalletModule,  // WalletService
     CartModule,    // CartService
+    UserModule,    // UserService, AddressService
   ],
   controllers: [OrderController, OrderAdminController],
   providers: [

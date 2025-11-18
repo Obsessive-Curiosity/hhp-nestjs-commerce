@@ -1,5 +1,4 @@
-import { OrderItemClaimStatus } from '@prisma/client';
-import { OrderItem } from '../entity/order-item.entity';
+import { OrderItem, OrderItemClaimStatus } from '../entity/order-item.entity';
 
 export interface OrderItemFilterOptions {
   orderId?: string;

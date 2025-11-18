@@ -35,15 +35,30 @@ export class CartUseCase {
 
     // 상품 정보 조회 (병렬 처리)
     const productIds = cartItems.map((item) => item.productId);
-    const productsData = await Promise.all(
-      productIds.map((id) => this.productService.findProductById(id, user)),
-    );
+    const [productsData, stocksData] = await Promise.all([
+      Promise.all(
+        productIds.map((id) => this.productService.findProduct(id, user.role)),
+      ),
+      Promise.all(
+        productIds.map((id) =>
+          this.stockService.getStock(id).catch(() => null),
+        ),
+      ),
+    ]);
 
-    // 상품 ID로 빠른 조회를 위한 Map 생성
+    // 상품 ID로 빠른 조회를 위한 Map 생성 (Product + Stock 조합)
     const productsMap = new Map<string, ProductWithStock>();
-    productsData.forEach((product) => {
+    productsData.forEach((product, index) => {
       if (product) {
-        productsMap.set(product.id, product as ProductWithStock);
+        const stock = stocksData[index];
+        productsMap.set(product.id, {
+          id: product.id,
+          name: product.name,
+          retailPrice: product.retailPrice ?? 0,
+          wholesalePrice: product.wholesalePrice ?? 0,
+          imageUrl: product.imageUrl,
+          stock: stock ? { quantity: stock.quantity } : null,
+        });
       }
     });
 

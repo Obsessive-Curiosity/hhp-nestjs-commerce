@@ -230,27 +230,27 @@
 
 ---
 
-## 10. 포인트 (Points)
+## 10. 지갑 (Wallet)
 
-### 10.1 포인트 잔액 조회
+### 10.1 지갑 잔액 조회
 
-- `GET /point/balance`
+- `GET /wallet/balance`
 - Headers: Authorization (JWT)
-- Response: 현재 포인트 잔액
+- Response: 현재 지갑 잔액
 
-### 10.2 포인트 충전
+### 10.2 지갑 충전
 
-- `POST /point/charge`
+- `POST /wallet/charge`
 - Headers: Authorization (JWT)
 - Request Body: amount
 - Response: 200 OK, 충전 후 잔액
 
-### 10.3 포인트 사용 내역 조회
+### 10.3 지갑 사용 내역 조회
 
-- `GET /point/history`
+- `GET /wallet/history`
 - Headers: Authorization (JWT)
 - Query: page, limit, type (charge, use, refund)
-- Response: 포인트 거래 내역
+- Response: 지갑 거래 내역
 
 ---
 
@@ -282,7 +282,7 @@
 
 - `POST /orders/:order_id/cancel`
 - Headers: Authorization (JWT)
-- Response: 200 OK (포인트/쿠폰 복구)
+- Response: 200 OK (지갑 잔액/쿠폰 복구)
 
 ### 11.5 주문 상태 변경 (관리자)
 
@@ -298,5 +298,5 @@
 
 - `POST /orders/:order_id/payment`
 - Headers: Authorization (JWT)
-- Request Body: 없음 (포인트로만 결제)
+- Request Body: 없음 (지갑 잔액으로만 결제)
 - Response: 200 OK, 결제 완료 정보

@@ -1,18 +1,17 @@
-import { createZodDto } from 'nestjs-zod';
-import { z } from 'zod';
+import { PartialType, PickType } from '@nestjs/mapped-types';
+import { CreateUserDto } from './create-user.dto';
+import { IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
 
-const phoneRegex = /^01[0-9]-?[0-9]{3,4}-?[0-9]{4}$/;
+// 모든 필드를 optional로 만들기 위해 PartialType 사용
+export class UpdateUserDto extends PartialType(
+  PickType(CreateUserDto, ['name', 'personalPhone', 'companyPhone']),
+) {
+  @IsOptional()
+  @IsString({ message: '현재 비밀번호는 문자열이어야 합니다' })
+  currentPassword?: string;
 
-export const UpdateUserSchema = z.object({
-  name: z.string().min(1, '이름을 입력해주세요.').optional(),
-  phone: z
-    .string()
-    .regex(phoneRegex, '올바른 전화번호 형식이 아닙니다.')
-    .optional(),
-  password: z
-    .string()
-    .min(8, '비밀번호는 최소 8자 이상이어야 합니다.')
-    .optional(),
-});
-
-export class UpdateUserDto extends createZodDto(UpdateUserSchema) {}
+  @IsOptional()
+  @IsString({ message: '새 비밀번호는 문자열이어야 합니다' })
+  @MinLength(8, { message: '새 비밀번호는 최소 8자 이상이어야 합니다' })
+  newPassword?: string;
+}

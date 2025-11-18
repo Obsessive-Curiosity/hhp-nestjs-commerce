@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { RBAC } from '@/auth/decorators/rbac.decorator';
 import { UserInfo } from '@/user/presentation/decorators/user-info.decorator';
 import { Payload } from '@/types/express';
-import { Role } from '@prisma/client';
+import { Role } from '@/user/domain/entity/user.entity';
 import { OrderFacade } from '@/order/application/order.facade';
 import { CreateOrderDto } from '../dto';
 
@@ -20,13 +20,7 @@ export class OrderController {
     @UserInfo() user: Payload,
     @Body() createOrderDto: CreateOrderDto,
   ) {
-    const result = await this.orderFacade.createOrder({
-      userId: user.sub,
-      userRole: user.role,
-      items: createOrderDto.items,
-      couponIds: createOrderDto.couponIds,
-      deliveryRequest: createOrderDto.deliveryRequest,
-    });
+    const result = await this.orderFacade.createOrder(user, createOrderDto);
 
     return {
       id: result.order.id,

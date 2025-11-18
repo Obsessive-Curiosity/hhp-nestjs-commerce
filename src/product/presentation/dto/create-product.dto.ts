@@ -1,54 +1,53 @@
-import { createZodDto } from 'nestjs-zod';
-import { z } from 'zod';
+import {
+  IsInt,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  IsUrl,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+} from 'class-validator';
 
-export const CreateProductSchema = z
-  .object({
-    categoryId: z
-      .number()
-      .int('카테고리 ID는 정수여야 합니다.')
-      .positive('카테고리 ID는 양수여야 합니다.'),
+export class CreateProductDto {
+  @IsInt({ message: '카테고리 ID는 정수여야 합니다.' })
+  @IsPositive({ message: '카테고리 ID는 양수여야 합니다.' })
+  categoryId: number;
 
-    name: z
-      .string()
-      .min(1, '상품명을 입력해주세요.')
-      .max(100, '상품명은 최대 100자까지 입력 가능합니다.'),
+  @IsString({ message: '상품명은 문자열이어야 합니다.' })
+  @IsNotEmpty({ message: '상품명을 입력해주세요.' })
+  @MinLength(1, { message: '상품명을 입력해주세요.' })
+  @MaxLength(100, { message: '상품명은 최대 100자까지 입력 가능합니다.' })
+  name: string;
 
-    retailPrice: z
-      .number()
-      .int('소매가는 정수여야 합니다.')
-      .nonnegative('소매가는 0 이상이어야 합니다.')
-      .optional(),
+  @IsOptional()
+  @IsNumber({}, { message: '소매가는 숫자여야 합니다.' })
+  @IsInt({ message: '소매가는 정수여야 합니다.' })
+  @Min(0, { message: '소매가는 0 이상이어야 합니다.' })
+  @Max(99999999, { message: '가격은 99,999,999 이하이어야 합니다.' })
+  retailPrice?: number;
 
-    wholesalePrice: z
-      .number()
-      .int('도매가는 정수여야 합니다.')
-      .nonnegative('도매가는 0 이상이어야 합니다.')
-      .optional(),
+  @IsOptional()
+  @IsNumber({}, { message: '도매가는 숫자여야 합니다.' })
+  @IsInt({ message: '도매가는 정수여야 합니다.' })
+  @Min(0, { message: '도매가는 0 이상이어야 합니다.' })
+  @Max(99999999, { message: '가격은 99,999,999 이하이어야 합니다.' })
+  wholesalePrice?: number;
 
-    description: z
-      .string()
-      .min(1, '상품 설명을 입력해주세요.')
-      .max(5000, '상품 설명은 최대 5000자까지 입력 가능합니다.'),
+  @IsString({ message: '상품 설명은 문자열이어야 합니다.' })
+  @IsNotEmpty({ message: '상품 설명을 입력해주세요.' })
+  @MinLength(1, { message: '상품 설명을 입력해주세요.' })
+  @MaxLength(5000, { message: '상품 설명은 최대 5000자까지 입력 가능합니다.' })
+  description: string;
 
-    imageUrl: z.url('올바른 URL 형식이 아닙니다.').optional().nullable(),
+  @IsOptional()
+  @IsUrl({}, { message: '올바른 URL 형식이 아닙니다.' })
+  imageUrl?: string | null;
 
-    stock: z
-      .int('재고는 정수여야 합니다.')
-      .nonnegative('재고는 0 이상이어야 합니다.'),
-  })
-  .superRefine((data, ctx) => {
-    if (data.retailPrice === undefined && data.wholesalePrice === undefined) {
-      ctx.addIssue({
-        code: 'custom',
-        message: '소매가 또는 도매가 중 최소 하나는 입력해야 합니다.',
-        path: ['retailPrice'],
-      });
-      ctx.addIssue({
-        code: 'custom',
-        message: '소매가 또는 도매가 중 최소 하나는 입력해야 합니다.',
-        path: ['wholesalePrice'],
-      });
-    }
-  });
-
-export class CreateProductDto extends createZodDto(CreateProductSchema) {}
+  @IsInt({ message: '재고는 정수여야 합니다.' })
+  @Min(0, { message: '재고는 0 이상이어야 합니다.' })
+  stock: number;
+}

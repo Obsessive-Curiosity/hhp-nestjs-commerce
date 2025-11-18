@@ -1,10 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { randomUUID } from 'crypto';
-import { Coupon, CreateCouponDto } from '../entity/coupon.entity';
+import { Coupon } from '../entity/coupon.entity';
 import {
   ICouponRepository,
   COUPON_REPOSITORY,
 } from '../interface/coupon.repository.interface';
+import { CreateCouponProps } from '../types';
 
 @Injectable()
 export class CouponService {
@@ -13,32 +13,16 @@ export class CouponService {
     private readonly couponRepository: ICouponRepository,
   ) {}
 
-  // 쿠폰 생성 (Coupon 테이블만)
-  async createCoupon(dto: CreateCouponDto): Promise<Coupon> {
-    // Domain Entity 생성 (비즈니스 규칙 검증 포함)
-    const coupon = Coupon.create({
-      ...dto,
-      id: randomUUID(),
-    });
+  // ==================== 조회 (Query) ====================
 
-    // Repository를 통해 저장
-    return this.couponRepository.create(coupon);
-  }
-
-  // 쿠폰 조회
+  // ID로 쿠폰 조회
   async findCouponById(id: string): Promise<Coupon | null> {
-    return this.couponRepository.findById(id, {
-      includeCategories: true,
-      includeProducts: true,
-    });
+    return this.couponRepository.findById(id);
   }
 
   // 모든 쿠폰 조회
   async findAllCoupons(): Promise<Coupon[]> {
-    return this.couponRepository.findAll({
-      includeCategories: true,
-      includeProducts: true,
-    });
+    return this.couponRepository.findAll();
   }
 
   // 발급 가능한 쿠폰 조회
@@ -54,6 +38,19 @@ export class CouponService {
     }
     return coupon.canIssue();
   }
+
+  // ==================== 생성 (Create) ====================
+
+  // 쿠폰 생성
+  async createCoupon(props: CreateCouponProps): Promise<Coupon> {
+    // Domain Entity 생성 (비즈니스 규칙 검증 포함)
+    const coupon = Coupon.create(props);
+
+    // Repository를 통해 저장
+    return this.couponRepository.create(coupon);
+  }
+
+  // ==================== 수정 (Update) ====================
 
   // BR-038: 쿠폰 발급 수량 증가
   async increaseIssuedQuantity(couponId: string): Promise<void> {

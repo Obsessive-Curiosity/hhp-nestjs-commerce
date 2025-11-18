@@ -1,98 +1,91 @@
-import { CouponStatus } from '@prisma/client';
-import { Coupon } from './coupon.entity';
+import { Entity, PrimaryKey, Property, Enum, t } from '@mikro-orm/core';
+import { BadRequestException } from '@nestjs/common';
+import { v7 as uuidv7 } from 'uuid';
 
-export interface UserCouponProps {
-  id: string;
-  userId: string;
-  couponId: string;
-  status: CouponStatus;
-  createdAt: Date;
-  expiredAt: Date;
-  usedAt: Date | null;
-
-  // Relations
-  coupon?: Coupon;
+export enum CouponStatus {
+  ISSUED = 'ISSUED',
+  USED = 'USED',
+  EXPIRED = 'EXPIRED',
 }
 
+export type CreateUserCouponProps = {
+  userId: string;
+  couponId: string;
+  expiredAt: Date;
+};
+
+@Entity({ tableName: 'user_coupon' })
 export class UserCoupon {
-  private readonly _id: string;
-  private readonly _userId: string;
-  private readonly _couponId: string;
-  private _status: CouponStatus;
-  private readonly _createdAt: Date;
-  private _expiredAt: Date;
-  private _usedAt: Date | null;
+  /**
+   * 대리키 ID
+   *
+   * userId + couponId 복합키가 아닌 별도 ID를 사용하는 이유:
+   * 1. Order 엔티티에서 특정 UserCoupon 인스턴스를 참조하기 위함
+   * 2. 쿠폰 발급/사용/만료의 완전한 이력 추적
+   * 3. 주문 취소 시 정확한 쿠폰 복구 지원
+   * 4. API/URL에서 단일 값으로 식별 가능
+   *
+   * Note: userId + couponId의 유니크 제약은 별도 인덱스로 관리
+   */
+  @PrimaryKey({ type: t.character, length: 36 })
+  id: string = uuidv7();
 
-  // Relations
-  private _coupon?: Coupon;
+  // User 엔티티를 참조 (N:1 관계)
+  @Property({ type: t.character, length: 36 })
+  userId!: string;
 
-  // 더티 체킹
-  private _dirtyFields: Set<string> = new Set();
+  // Coupon 엔티티를 참조 (N:1 관계)
+  @Property({ type: t.character, length: 36 })
+  couponId!: string;
 
-  constructor(props: UserCouponProps) {
-    this._id = props.id;
-    this._userId = props.userId;
-    this._couponId = props.couponId;
-    this._status = props.status;
-    this._createdAt = props.createdAt;
-    this._expiredAt = props.expiredAt;
-    this._usedAt = props.usedAt;
-    this._coupon = props.coupon;
+  // 쿠폰 상태 (ISSUED: 발급됨, USED: 사용됨, EXPIRED: 만료됨)
+  @Enum(() => CouponStatus)
+  status!: CouponStatus;
+
+  // 쿠폰 발급일
+  @Property({ onCreate: () => new Date() })
+  createdAt!: Date;
+
+  // 쿠폰 만료일
+  @Property()
+  expiredAt!: Date;
+
+  // 쿠폰 사용일 (null = 미사용)
+  @Property({ nullable: true })
+  usedAt!: Date | null;
+
+  // =================== Constructor ===================
+
+  protected constructor(data?: Partial<UserCoupon>) {
+    if (data) {
+      Object.assign(this, data);
+    }
   }
 
-  // Getters
-  get id(): string {
-    return this._id;
+  // ================== Factory (생성) ==================
+
+  static create(params: CreateUserCouponProps): UserCoupon {
+    const userCoupon = new UserCoupon();
+    userCoupon.userId = params.userId;
+    userCoupon.couponId = params.couponId;
+    userCoupon.status = CouponStatus.ISSUED;
+    userCoupon.expiredAt = params.expiredAt;
+    userCoupon.usedAt = null;
+
+    return userCoupon;
   }
 
-  get userId(): string {
-    return this._userId;
-  }
+  // ==================== 조회 ====================
 
-  get couponId(): string {
-    return this._couponId;
-  }
-
-  get status(): CouponStatus {
-    return this._status;
-  }
-
-  get createdAt(): Date {
-    return this._createdAt;
-  }
-
-  get expiredAt(): Date {
-    return this._expiredAt;
-  }
-
-  get usedAt(): Date | null {
-    return this._usedAt;
-  }
-
-  get coupon(): Coupon | undefined {
-    return this._coupon;
-  }
-
-  // 더티 체킹 관련 메서드
-  getDirtyFields(): Set<string> {
-    return this._dirtyFields;
-  }
-
-  clearDirtyFields(): void {
-    this._dirtyFields.clear();
-  }
-
-  // BR-045: 만료 여부 확인
   isExpired(): boolean {
-    if (this._status === CouponStatus.EXPIRED) {
+    if (this.status === CouponStatus.EXPIRED) {
       return true;
     }
-    return new Date() > this._expiredAt;
+    return new Date() > this.expiredAt;
   }
 
-  // BR-047: 사용 가능 여부 확인
   canUse(): boolean {
-    if (this._status !== CouponStatus.ISSUED) {
+    if (this.status !== CouponStatus.ISSUED) {
       return false;
     }
     if (this.isExpired()) {
@@ -101,56 +94,31 @@ export class UserCoupon {
     return true;
   }
 
-  // BR-047: 쿠폰 사용 처리
+  // ==================== 수정 ====================
+
   use(): void {
     if (!this.canUse()) {
-      throw new Error('사용할 수 없는 쿠폰입니다.');
+      throw new BadRequestException('사용할 수 없는 쿠폰입니다.');
     }
-    this._status = CouponStatus.USED;
-    this._usedAt = new Date();
-    this._dirtyFields.add('status');
-    this._dirtyFields.add('usedAt');
+    this.status = CouponStatus.USED;
+    this.usedAt = new Date();
   }
 
-  // BR-054: 쿠폰 복구 (주문 취소 시)
   restore(): void {
-    if (this._status !== CouponStatus.USED) {
-      throw new Error('사용된 쿠폰만 복구할 수 있습니다.');
+    if (this.status !== CouponStatus.USED) {
+      throw new BadRequestException('사용된 쿠폰만 복구할 수 있습니다.');
     }
     if (this.isExpired()) {
-      throw new Error('만료된 쿠폰은 복구할 수 없습니다.');
+      throw new BadRequestException('만료된 쿠폰은 복구할 수 없습니다.');
     }
-    this._status = CouponStatus.ISSUED;
-    this._usedAt = null;
-    this._dirtyFields.add('status');
-    this._dirtyFields.add('usedAt');
+    this.status = CouponStatus.ISSUED;
+    this.usedAt = null;
   }
 
-  // 만료 처리
   expire(): void {
-    if (this._status !== CouponStatus.ISSUED) {
-      throw new Error('발급된 쿠폰만 만료 처리할 수 있습니다.');
+    if (this.status !== CouponStatus.ISSUED) {
+      throw new BadRequestException('발급된 쿠폰만 만료 처리할 수 있습니다.');
     }
-    this._status = CouponStatus.EXPIRED;
-    this._dirtyFields.add('status');
-  }
-
-  // Factory 메서드: 신규 UserCoupon 생성
-  static create(params: {
-    id: string;
-    userId: string;
-    couponId: string;
-    expiredAt: Date;
-  }): UserCoupon {
-    const now = new Date();
-    return new UserCoupon({
-      id: params.id,
-      userId: params.userId,
-      couponId: params.couponId,
-      status: CouponStatus.ISSUED,
-      createdAt: now,
-      expiredAt: params.expiredAt,
-      usedAt: null,
-    });
+    this.status = CouponStatus.EXPIRED;
   }
 }
