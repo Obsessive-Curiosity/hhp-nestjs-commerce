@@ -1,7 +1,6 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { OrderItem } from '../entity/order-item.entity';
-import { OrderItemClaimStatus } from '@prisma/client';
+import { OrderItem, OrderItemClaimStatus } from '../entity/order-item.entity';
 import {
   IOrderItemRepository,
   ORDER_ITEM_REPOSITORY,
@@ -14,53 +13,9 @@ export class OrderItemService {
     private readonly orderItemRepository: IOrderItemRepository,
   ) {}
 
-  /**
-   * 새 주문 항목 생성
-   */
-  async createOrderItem(params: {
-    orderId: string;
-    productId: string;
-    usedItemCouponId: string | null;
-    quantity: number;
-    unitPrice: number;
-    discountAmount: number;
-    paymentAmount: number;
-  }): Promise<OrderItem> {
-    const orderItem = OrderItem.create({
-      id: randomUUID(),
-      ...params,
-    });
+  // ==================== 조회 (Query) ====================
 
-    return this.orderItemRepository.create(orderItem);
-  }
-
-  /**
-   * 여러 주문 항목 일괄 생성
-   */
-  async createOrderItems(
-    items: Array<{
-      orderId: string;
-      productId: string;
-      usedItemCouponId: string | null;
-      quantity: number;
-      unitPrice: number;
-      discountAmount: number;
-      paymentAmount: number;
-    }>,
-  ): Promise<OrderItem[]> {
-    const orderItems = items.map((item) =>
-      OrderItem.create({
-        id: randomUUID(),
-        ...item,
-      }),
-    );
-
-    return this.orderItemRepository.createMany(orderItems);
-  }
-
-  /**
-   * 주문 항목 조회 by ID
-   */
+  // 주문 항목 조회 by ID
   async findOrderItemById(orderItemId: string): Promise<OrderItem> {
     const orderItem = await this.orderItemRepository.findById(orderItemId);
 
@@ -73,23 +28,60 @@ export class OrderItemService {
     return orderItem;
   }
 
-  /**
-   * 주문별 주문 항목 목록 조회
-   */
+  // 주문별 주문 항목 목록 조회
   async findOrderItemsByOrderId(orderId: string): Promise<OrderItem[]> {
     return this.orderItemRepository.findByOrderId(orderId);
   }
 
-  /**
-   * 상품별 주문 항목 목록 조회
-   */
+  // 상품별 주문 항목 목록 조회
   async findOrderItemsByProductId(productId: string): Promise<OrderItem[]> {
     return this.orderItemRepository.findByProductId(productId);
   }
 
-  /**
-   * 클레임 상태 업데이트
-   */
+  // 주문별 주문 항목 개수 조회
+  async countOrderItems(orderId: string): Promise<number> {
+    return this.orderItemRepository.countByOrderId(orderId);
+  }
+
+  // ==================== 생성 (Create) ====================
+
+  // 새 주문 항목 생성
+  async createOrderItem(params: {
+    orderId: string;
+    productId: string;
+    usedItemCouponId: string | null;
+    quantity: number;
+    unitPrice: number;
+    discountAmount: number;
+    paymentAmount: number;
+  }): Promise<OrderItem> {
+    const orderItem = OrderItem.create(params);
+
+    return this.orderItemRepository.create(orderItem);
+  }
+
+  // ==================== 생성 (Batch) ====================
+
+  // 여러 주문 항목 일괄 생성
+  async createOrderItems(
+    items: Array<{
+      orderId: string;
+      productId: string;
+      usedItemCouponId: string | null;
+      quantity: number;
+      unitPrice: number;
+      discountAmount: number;
+      paymentAmount: number;
+    }>,
+  ): Promise<OrderItem[]> {
+    const orderItems = items.map((item) => OrderItem.create(item));
+
+    return this.orderItemRepository.createMany(orderItems);
+  }
+
+  // ==================== 수정 (Update) ====================
+
+  // 클레임 상태 업데이트
   async updateClaimStatus(
     orderItemId: string,
     claimStatus: OrderItemClaimStatus | null,
@@ -101,9 +93,7 @@ export class OrderItemService {
     return this.orderItemRepository.update(orderItem);
   }
 
-  /**
-   * 반품 요청
-   */
+  // 반품 요청
   async requestReturn(orderItemId: string): Promise<OrderItem> {
     const orderItem = await this.findOrderItemById(orderItemId);
 
@@ -112,9 +102,7 @@ export class OrderItemService {
     return this.orderItemRepository.update(orderItem);
   }
 
-  /**
-   * 반품 완료
-   */
+  // 반품 완료
   async completeReturn(orderItemId: string): Promise<OrderItem> {
     const orderItem = await this.findOrderItemById(orderItemId);
 
@@ -123,9 +111,7 @@ export class OrderItemService {
     return this.orderItemRepository.update(orderItem);
   }
 
-  /**
-   * 교환 요청
-   */
+  // 교환 요청
   async requestExchange(orderItemId: string): Promise<OrderItem> {
     const orderItem = await this.findOrderItemById(orderItemId);
 
@@ -134,21 +120,12 @@ export class OrderItemService {
     return this.orderItemRepository.update(orderItem);
   }
 
-  /**
-   * 교환 완료
-   */
+  // 교환 완료
   async completeExchange(orderItemId: string): Promise<OrderItem> {
     const orderItem = await this.findOrderItemById(orderItemId);
 
     orderItem.completeExchange();
 
     return this.orderItemRepository.update(orderItem);
-  }
-
-  /**
-   * 주문별 주문 항목 개수 조회
-   */
-  async countOrderItems(orderId: string): Promise<number> {
-    return this.orderItemRepository.countByOrderId(orderId);
   }
 }

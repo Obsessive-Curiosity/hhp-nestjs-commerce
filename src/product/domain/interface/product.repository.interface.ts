@@ -1,48 +1,29 @@
+import { Role } from '@/user/domain/entity/user.entity';
 import { Product } from '../entity/product.entity';
-import { Role } from '@prisma/client';
 
 export interface ProductFilterOptions {
-  categoryId?: number;
-  onlyInStock?: boolean;
-  includeDeleted?: boolean;
-}
-
-export interface ProductIncludeOptions {
-  includeCategory?: boolean;
-  includeStock?: boolean;
-  userRole?: Role;
+  categoryId?: number; // 특정 카테고리의 상품만 조회
+  onlyInStock?: boolean; // 재고가 있는 상품만 조회 (stock.quantity > 0)
 }
 
 export interface IProductRepository {
   // 상품 존재 여부 확인
-  existsById(id: string): Promise<boolean>;
+  exists(id: string): Promise<boolean>;
 
-  // ID로 상품 조회
-  findById(
-    id: string,
-    options?: ProductIncludeOptions,
-  ): Promise<Product | null>;
+  // ID로 상품 조회 (category, stock 기본 포함)
+  findOne(id: string, role?: Role): Promise<Product | null>;
 
-  // 모든 상품 조회
-  findAll(
-    filterOptions?: ProductFilterOptions,
-    includeOptions?: ProductIncludeOptions,
-  ): Promise<Product[]>;
-
-  // 카테고리별 상품 조회
-  findByCategoryId(
-    categoryId: number,
-    includeOptions?: ProductIncludeOptions,
-  ): Promise<Product[]>;
+  // 모든 상품 조회 (필터 옵션으로 카테고리별 조회 가능, category, stock 기본 포함)
+  find(role?: Role, filterOptions?: ProductFilterOptions): Promise<Product[]>;
 
   // 상품 생성
-  create(product: Product, initialStock?: number): Promise<Product>;
+  create(product: Product): Promise<Product>;
 
   // 상품 업데이트
-  update(product: Product, stockQuantity?: number): Promise<Product>;
+  update(product: Product): Promise<Product>;
 
   // 상품 삭제 (Soft Delete)
-  delete(productId: string): Promise<void>;
+  softDelete(productId: string): Promise<void>;
 }
 
 // Repository 의존성 주입을 위한 토큰

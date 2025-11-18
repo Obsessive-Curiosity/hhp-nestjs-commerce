@@ -4,9 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { randomUUID } from 'crypto';
-import { Order } from '../entity/order.entity';
-import { OrderStatus } from '@prisma/client';
+import { Order, OrderStatus } from '../entity/order.entity';
 import {
   IOrderRepository,
   ORDER_REPOSITORY,
@@ -14,6 +12,7 @@ import {
   OrderPaginationOptions,
   OrderIncludeOptions,
 } from '../interface/order.repository.interface';
+import { CreateOrderProps } from '../types';
 
 @Injectable()
 export class OrderService {
@@ -22,33 +21,9 @@ export class OrderService {
     private readonly orderRepository: IOrderRepository,
   ) {}
 
-  /**
-   * 새 주문 생성
-   */
-  async createOrder(params: {
-    userId: string;
-    usedCouponId: string | null;
-    basePrice: number;
-    discountAmount: number;
-    paymentAmount: number;
-    recipientName: string;
-    phone: string;
-    zipCode: string;
-    address: string;
-    addressDetail: string;
-    deliveryRequest?: string | null;
-  }): Promise<Order> {
-    const order = Order.create({
-      id: randomUUID(),
-      ...params,
-    });
+  // ==================== 조회 (Query) ====================
 
-    return this.orderRepository.create(order);
-  }
-
-  /**
-   * 주문 조회 by ID
-   */
+  // 주문 조회 by ID
   async findOrderById(
     orderId: string,
     options?: OrderIncludeOptions,
@@ -62,9 +37,7 @@ export class OrderService {
     return order;
   }
 
-  /**
-   * 사용자별 주문 목록 조회
-   */
+  // 사용자별 주문 목록 조회
   async findUserOrders(
     userId: string,
     filterOptions?: OrderFilterOptions,
@@ -79,9 +52,7 @@ export class OrderService {
     );
   }
 
-  /**
-   * 모든 주문 조회 (관리자용)
-   */
+  // 모든 주문 조회 (관리자용)
   async findAllOrders(
     filterOptions?: OrderFilterOptions,
     paginationOptions?: OrderPaginationOptions,
@@ -94,67 +65,7 @@ export class OrderService {
     );
   }
 
-  /**
-   * 주문 상태 업데이트
-   */
-  async updateOrderStatus(
-    orderId: string,
-    status: OrderStatus,
-  ): Promise<Order> {
-    const order = await this.findOrderById(orderId);
-
-    order.updateStatus(status);
-
-    return this.orderRepository.update(order);
-  }
-
-  /**
-   * 결제 완료 처리
-   */
-  async markOrderAsPaid(orderId: string): Promise<Order> {
-    const order = await this.findOrderById(orderId);
-
-    order.markAsPaid();
-
-    return this.orderRepository.update(order);
-  }
-
-  /**
-   * 주문 취소
-   */
-  async cancelOrder(orderId: string): Promise<Order> {
-    const order = await this.findOrderById(orderId);
-
-    order.cancel();
-
-    return this.orderRepository.update(order);
-  }
-
-  /**
-   * 배송 시작
-   */
-  async shipOrder(orderId: string): Promise<Order> {
-    const order = await this.findOrderById(orderId);
-
-    order.ship();
-
-    return this.orderRepository.update(order);
-  }
-
-  /**
-   * 배송 완료
-   */
-  async deliverOrder(orderId: string): Promise<Order> {
-    const order = await this.findOrderById(orderId);
-
-    order.deliver();
-
-    return this.orderRepository.update(order);
-  }
-
-  /**
-   * 주문 존재 여부 확인
-   */
+  // 주문 존재 여부 확인
   async checkOrderExists(orderId: string): Promise<boolean> {
     const exists = await this.orderRepository.existsById(orderId);
     if (!exists) {
@@ -163,9 +74,7 @@ export class OrderService {
     return true;
   }
 
-  /**
-   * 사용자별 주문 개수 조회
-   */
+  // 사용자별 주문 개수 조회
   async countUserOrders(
     userId: string,
     filterOptions?: OrderFilterOptions,
@@ -173,16 +82,12 @@ export class OrderService {
     return this.orderRepository.countByUserId(userId, filterOptions);
   }
 
-  /**
-   * 전체 주문 개수 조회
-   */
+  // 전체 주문 개수 조회
   async countAllOrders(filterOptions?: OrderFilterOptions): Promise<number> {
     return this.orderRepository.countAll(filterOptions);
   }
 
-  /**
-   * 주문 권한 검증 (사용자가 자신의 주문인지 확인)
-   */
+  // 주문 권한 검증 (사용자가 자신의 주문인지 확인)
   async validateOrderOwnership(
     orderId: string,
     userId: string,
@@ -194,5 +99,103 @@ export class OrderService {
     }
 
     return order;
+  }
+
+  // ==================== 생성 (Create) ====================
+
+  // 새 주문 생성
+  async createOrder(props: CreateOrderProps): Promise<Order> {
+    const order = Order.create(props);
+
+    return this.orderRepository.create(order);
+  }
+
+  // ==================== 수정 (Update) ====================
+
+  // 주문 상태 업데이트
+  async updateOrderStatus(
+    orderId: string,
+    status: OrderStatus,
+  ): Promise<Order> {
+    const order = await this.findOrderById(orderId);
+
+    order.updateStatus(status);
+
+    return this.orderRepository.update(order);
+  }
+
+  // 결제 완료 처리
+  async markOrderAsPaid(orderId: string): Promise<Order> {
+    const order = await this.findOrderById(orderId);
+
+    order.markAsPaid();
+
+    return this.orderRepository.update(order);
+  }
+
+  // 주문 취소
+  async cancelOrder(orderId: string): Promise<Order> {
+    const order = await this.findOrderById(orderId);
+
+    order.cancel();
+
+    return this.orderRepository.update(order);
+  }
+
+  // 배송 시작
+  async shipOrder(orderId: string): Promise<Order> {
+    const order = await this.findOrderById(orderId);
+
+    order.ship();
+
+    return this.orderRepository.update(order);
+  }
+
+  // 배송 완료
+  async deliverOrder(orderId: string): Promise<Order> {
+    const order = await this.findOrderById(orderId);
+
+    order.deliver();
+
+    return this.orderRepository.update(order);
+  }
+
+  // ==================== 정책 (Policy) ====================
+
+  /**
+   * 재고 부족 상품 자동 제외 정책
+   *
+   * BR-021: 재고 부족 상품 자동 제외 (사용자 설정에 따라)
+   * FR-014: 재고 부족 시 전체 실패 또는 자동 제외 옵션
+   *
+   * @param items - 주문하려는 상품 목록
+   * @param stockChecks - 각 상품의 재고 확인 결과
+   * @returns 재고가 있는 상품 목록과 제외된 상품 ID 목록
+   */
+  excludeOutOfStockItems<T extends { productId: string; quantity: number }>(
+    items: T[],
+    stockChecks: Array<{ productId: string; hasStock: boolean }>,
+  ): { includedItems: T[]; excludedProductIds: string[] } {
+    const stockMap = new Map<string, boolean>(
+      stockChecks.map((check) => [check.productId, check.hasStock]),
+    );
+
+    const includedItems: T[] = [];
+    const excludedProductIds: string[] = [];
+
+    for (const item of items) {
+      const hasStock = stockMap.get(item.productId);
+
+      if (hasStock === true) {
+        includedItems.push(item);
+      } else {
+        excludedProductIds.push(item.productId);
+      }
+    }
+
+    return {
+      includedItems,
+      excludedProductIds,
+    };
   }
 }

@@ -1,14 +1,15 @@
-import { Payload } from '@/types/express';
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { randomUUID } from 'crypto';
 import { Product } from '../entity/product.entity';
 import {
   IProductRepository,
   PRODUCT_REPOSITORY,
 } from '../interface/product.repository.interface';
-import { CreateProductDto, UpdateProductDto } from '@/product/presentation/dto';
-import { Role } from '@prisma/client';
-import { getRolePermissions } from '../utils/role-permissions.utils';
+import {
+  CreateProductProps,
+  GetProductsFilters,
+  UpdateProductProps,
+} from '../types';
+import { Role } from '@/user/domain/entity/user.entity';
 
 @Injectable()
 export class ProductService {
@@ -17,58 +18,19 @@ export class ProductService {
     private readonly productRepository: IProductRepository,
   ) {}
 
-  async createProduct(dto: Omit<CreateProductDto, 'stock'>): Promise<Product> {
-    // Domain Entity 생성 (비즈니스 규칙 검증 포함)
-    const product = Product.create({
-      id: randomUUID(),
-      categoryId: dto.categoryId,
-      name: dto.name,
-      description: dto.description,
-      retailPrice: dto.retailPrice ?? null,
-      wholesalePrice: dto.wholesalePrice ?? null,
-      imageUrl: dto.imageUrl ?? null,
-    });
+  // ==================== 조회 (Query) ====================
 
-    // Repository를 통해 저장
-    const newProduct = await this.productRepository.create(product);
-
-    return newProduct;
+  // 상품 목록 조회
+  async findProducts(
+    filters?: GetProductsFilters,
+    role?: Role,
+  ): Promise<Product[]> {
+    return await this.productRepository.find(role, filters);
   }
 
-  async updateProduct(id: string, dto: UpdateProductDto): Promise<Product> {
-    // 기존 상품 조회
-    const product = await this.productRepository.findById(id);
-
-    if (!product) {
-      throw new NotFoundException(`ID ${id}인 상품을 찾을 수 없습니다.`);
-    }
-
-    // Domain Entity 업데이트 (비즈니스 규칙 검증 포함)
-    product.updateInfo(dto);
-
-    // Repository를 통해 저장
-    return this.productRepository.update(product);
-  }
-
-  async findAllProducts(user?: Payload): Promise<Product[]> {
-    const { role } = user || {};
-
-    return this.productRepository.findAll(undefined, {
-      includeCategory: true,
-      includeStock: true,
-      userRole: role,
-    });
-  }
-
-  async findProductById(id: string, user?: Payload): Promise<Product | null> {
-    const { role } = user || {};
-
-    const product = await this.productRepository.findById(id, {
-      includeCategory: true,
-      includeStock: true,
-      userRole: role,
-    });
-
+  // 상품 조회 by ID
+  async findProduct(id: string, role?: Role): Promise<Product | null> {
+    const product = await this.productRepository.findOne(id, role);
     if (!product) {
       throw new NotFoundException(`ID ${id}인 상품을 찾을 수 없습니다.`);
     }
@@ -76,15 +38,43 @@ export class ProductService {
     return product;
   }
 
-  getRolePermissions(userRole?: Role) {
-    return getRolePermissions(userRole);
-  }
-
+  // 상품 존재 여부 확인
   async checkExistProduct(productId: string) {
-    const exists = await this.productRepository.existsById(productId);
+    const exists = await this.productRepository.exists(productId);
     if (!exists) {
       throw new NotFoundException(`ID ${productId}인 상품을 찾을 수 없습니다.`);
     }
     return true;
+  }
+
+  // ==================== 생성 (Create) ====================
+
+  // 상품 생성
+  async createProduct(props: CreateProductProps): Promise<Product> {
+    // Domain Entity 생성 (비즈니스 규칙 검증 포함)
+    const product = Product.create(props);
+
+    // Repository를 통해 저장
+    const newProduct = await this.productRepository.create(product);
+
+    return newProduct;
+  }
+
+  // ==================== 수정 (Update) ====================
+
+  // 상품 정보 수정
+  async updateProduct(id: string, props: UpdateProductProps): Promise<Product> {
+    // 기존 상품 조회 (관리자 작업이므로 role 없이 전체 데이터 조회)
+    const product = await this.productRepository.findOne(id, Role.ADMIN);
+
+    if (!product) {
+      throw new NotFoundException(`ID ${id}인 상품을 찾을 수 없습니다.`);
+    }
+
+    // Domain Entity 업데이트 (비즈니스 규칙 검증 포함)
+    product.updateInfo(props);
+
+    // Repository를 통해 저장
+    return await this.productRepository.update(product);
   }
 }

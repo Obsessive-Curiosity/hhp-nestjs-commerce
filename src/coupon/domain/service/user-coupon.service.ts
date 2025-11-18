@@ -4,9 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { randomUUID } from 'crypto';
-import { CouponStatus } from '@prisma/client';
-import { UserCoupon } from '../entity/user-coupon.entity';
+import { UserCoupon, CouponStatus } from '../entity/user-coupon.entity';
 import { Coupon } from '../entity/coupon.entity';
 import {
   IUserCouponRepository,
@@ -26,16 +24,27 @@ export class UserCouponService {
     private readonly couponRepository: ICouponRepository,
   ) {}
 
+  // ==================== 조회 (Query) ====================
+
   // BR-039: 중복 발급 확인
-  async checkDuplicateIssue(
-    userId: string,
-    couponId: string,
-  ): Promise<boolean> {
-    return this.userCouponRepository.existsByUserIdAndCouponId(
-      userId,
-      couponId,
-    );
+  checkDuplicateIssue(userId: string, couponId: string): Promise<boolean> {
+    return this.userCouponRepository.hasCoupon(userId, couponId);
   }
+
+  // 사용자의 쿠폰 목록 조회
+  async findUserCoupons(
+    userId: string,
+    status?: CouponStatus,
+  ): Promise<UserCoupon[]> {
+    return this.userCouponRepository.findByUserId(userId, status);
+  }
+
+  // 사용자의 사용 가능한 쿠폰 조회
+  async findAvailableCoupons(userId: string): Promise<UserCoupon[]> {
+    return this.userCouponRepository.findAvailableCouponsByUserId(userId);
+  }
+
+  // ==================== 생성 (Create) ====================
 
   // BR-040: UserCoupon 발급
   async issueCoupon(userId: string, coupon: Coupon): Promise<UserCoupon> {
@@ -50,7 +59,6 @@ export class UserCouponService {
 
     // UserCoupon 생성
     const userCoupon = UserCoupon.create({
-      id: randomUUID(),
       userId,
       couponId: coupon.id,
       expiredAt,
@@ -60,21 +68,7 @@ export class UserCouponService {
     return this.userCouponRepository.create(userCoupon);
   }
 
-  // 사용자의 쿠폰 목록 조회
-  async findUserCoupons(
-    userId: string,
-    status?: CouponStatus,
-  ): Promise<UserCoupon[]> {
-    return this.userCouponRepository.findByUserId(userId, {
-      status,
-      includeCoupon: true,
-    });
-  }
-
-  // 사용자의 사용 가능한 쿠폰 조회
-  async findAvailableCoupons(userId: string): Promise<UserCoupon[]> {
-    return this.userCouponRepository.findAvailableCouponsByUserId(userId);
-  }
+  // ==================== 수정 (Update) ====================
 
   // BR-047: 쿠폰 사용
   async useCoupon(userCouponId: string): Promise<UserCoupon> {
@@ -104,7 +98,9 @@ export class UserCouponService {
     return this.userCouponRepository.update(userCoupon);
   }
 
-  // 만료된 쿠폰 처리
+  // ==================== 배치 작업 (Batch) ====================
+
+  // 만료된 쿠폰 처리 (스케줄러용)
   async expireExpiredCoupons(): Promise<void> {
     const expiredCoupons = await this.userCouponRepository.findExpiredCoupons();
     if (expiredCoupons.length === 0) {

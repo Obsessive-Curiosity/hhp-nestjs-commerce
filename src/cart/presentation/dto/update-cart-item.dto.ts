@@ -1,11 +1,7 @@
-import { createZodDto } from 'nestjs-zod';
-import { z } from 'zod';
+import { IsInt, Min } from 'class-validator';
 
-export const UpdateCartItemSchema = z.object({
-  quantity: z
-    .number()
-    .int('수량은 정수여야 합니다.')
-    .min(1, '수량은 1개 이상이어야 합니다.'),
-});
-
-export class UpdateCartItemDto extends createZodDto(UpdateCartItemSchema) {}
+export class UpdateCartItemDto {
+  @IsInt({ message: '수량은 정수여야 합니다.' })
+  @Min(1, { message: '수량은 1개 이상이어야 합니다.' })
+  quantity: number;
+}

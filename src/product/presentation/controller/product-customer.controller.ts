@@ -1,20 +1,29 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { UserInfo } from '@/user/presentation/decorators/user-info.decorator';
 import { Public } from '@/auth/decorators/public.decorator';
 import { Payload } from '@/types/express';
 import { RBAC } from '@/auth/decorators/rbac.decorator';
-import { Role } from '@prisma/client';
-import { ProductFacadeService } from '@/product/application/product.facade';
+import { Role } from '@/user/domain/entity/user.entity';
+import { ProductFacade } from '@/product/application/product.facade';
+import { GetProductsQueryDto } from '../dto/get-products-query.dto';
 
 @RBAC([Role.RETAILER, Role.WHOLESALER])
 @Controller('product')
 export class ProductCustomerController {
-  constructor(private readonly productFacade: ProductFacadeService) {}
+  constructor(private readonly productFacade: ProductFacade) {}
 
   @Get()
   @Public()
-  findAll(@UserInfo() user?: Payload) {
-    return this.productFacade.getProducts(user);
+  findAll(@Query() query: GetProductsQueryDto, @UserInfo() user?: Payload) {
+    return this.productFacade.getProducts(
+      {
+        categoryId: query.categoryId,
+        minPrice: query.minPrice,
+        maxPrice: query.maxPrice,
+        search: query.search,
+      },
+      user,
+    );
   }
 
   @Get(':id')

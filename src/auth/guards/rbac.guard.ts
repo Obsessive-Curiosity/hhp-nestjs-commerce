@@ -1,6 +1,6 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { Role } from '@prisma/client';
+import { Role } from '@/user/domain/entity/user.entity';
 import { Request } from 'express';
 import { RBAC } from '../decorators/rbac.decorator';
 import { Public } from '../decorators/public.decorator';
@@ -8,6 +8,7 @@ import { Public } from '../decorators/public.decorator';
 @Injectable()
 export class RbacGuard implements CanActivate {
   constructor(private reflector: Reflector) {}
+
   canActivate(context: ExecutionContext): boolean {
     // 0. Public 데코레이터 확인
     const isPublic = this.reflector.getAllAndOverride(Public, [

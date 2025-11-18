@@ -1,214 +1,174 @@
-// Prisma 타입 재사용 (중복 정의 제거)
-import { Role, BusinessInfo, ShippingAddress } from '@prisma/client';
+import {
+  Entity,
+  PrimaryKey,
+  Property,
+  Enum,
+  t,
+  Embeddable,
+  Embedded,
+} from '@mikro-orm/core';
+import { v7 as uuidv7 } from 'uuid';
+import { BadRequestException } from '@nestjs/common';
+import { UpdateUserProps } from '../types';
 
-export { Role };
+// Role enum 정의
+export enum Role {
+  GUEST = 'GUEST', // 게스트 (미인증)
+  RETAILER = 'RETAILER', // 소비자 (B2C)
+  WHOLESALER = 'WHOLESALER', // 도매자 (B2B)
+  ADMIN = 'ADMIN', // 관리자
+}
 
-export interface UserProps {
-  id: string;
-  role: Role;
+@Embeddable()
+export class PhoneNumber {
+  @Property()
+  number!: string;
+  @Property()
+  type?: string; // 예: 'mobile', 'work'
+}
+
+export type CreateUserProps = {
   email: string;
   password: string;
   name: string;
-  phone: string;
-  createdAt: Date;
-  updatedAt: Date;
-  deletedAt?: Date | null;
-  lastLoginAt?: Date | null;
+  personalPhone: PhoneNumber;
+  companyPhone?: PhoneNumber | null;
+  role?: Role;
+};
 
-  // User Aggregate 내부 Relations (생명주기가 User와 동일)
-  businessInfo?: BusinessInfo | null;
-  shippingAddresses?: ShippingAddress[];
-}
-
+@Entity()
 export class User {
-  private readonly _id: string;
-  private readonly _role: Role;
-  private readonly _email: string;
-  private _password: string;
-  private _name: string;
-  private _phone: string;
-  private readonly _createdAt: Date;
-  private _updatedAt: Date;
-  private _deletedAt?: Date | null;
-  private _lastLoginAt?: Date | null;
+  @PrimaryKey({ type: t.character, length: 36 })
+  id: string = uuidv7();
 
-  // User Aggregate 내부 Relations
-  private _businessInfo?: BusinessInfo | null;
-  private _shippingAddresses?: ShippingAddress[];
+  // 사용자 역할 (RETAILER: 소비자, WHOLESALER: 도매자, ADMIN: 관리자)
+  @Enum(() => Role)
+  role?: Role = Role.RETAILER;
 
-  // 변경된 필드를 추적 (더티 체킹)
-  private _dirtyFields: Set<string> = new Set();
+  // 이메일 (고유값)
+  @Property({ type: t.string, unique: true })
+  email!: string;
 
-  constructor(props: UserProps) {
-    this._id = props.id;
-    this._role = props.role ?? Role.RETAILER;
-    this._email = props.email;
-    this._password = props.password;
-    this._name = props.name;
-    this._phone = props.phone;
-    this._createdAt = props.createdAt;
-    this._updatedAt = props.updatedAt;
-    this._deletedAt = props.deletedAt;
-    this._lastLoginAt = props.lastLoginAt;
+  // 비밀번호 (해시됨)
+  @Property({ type: t.string })
+  password!: string;
 
-    // Relations (있으면 할당)
-    this._businessInfo = props.businessInfo;
-    this._shippingAddresses = props.shippingAddresses;
+  // 이름
+  @Property({ type: t.string })
+  name!: string;
+
+  // 개인 전화번호
+  @Embedded(() => PhoneNumber, { prefix: 'personal_' })
+  personalPhone!: PhoneNumber;
+
+  // 회사 전화번호 (null = 없음)
+  @Embedded(() => PhoneNumber, { prefix: 'company_', nullable: true })
+  companyPhone: PhoneNumber | null = null;
+
+  // =================== Timestamps ===================
+
+  // 사용자 생성일
+  @Property({ type: t.datetime, onCreate: () => new Date() })
+  createdAt: Date;
+
+  // 사용자 수정일
+  @Property({ type: t.datetime, onUpdate: () => new Date() })
+  updatedAt: Date;
+
+  // 사용자 삭제일 (null = 삭제되지 않음, Soft Delete)
+  @Property({ type: t.datetime, nullable: true })
+  deletedAt!: Date | null;
+
+  // 마지막 로그인 일시 (null = 로그인 기록 없음)
+  @Property({ type: t.datetime, nullable: true })
+  lastLoginAt!: Date | null;
+
+  // =================== Constructor ===================
+
+  protected constructor(data?: Partial<User>) {
+    if (data) {
+      Object.assign(this, data);
+    }
   }
 
-  // Getters
-  get id(): string {
-    return this._id;
+  // ================== Factory (생성) ==================
+
+  // 사용자 생성
+  static create(props: CreateUserProps): User {
+    const user = new User(); // 빈 사용자 객체 생성
+
+    user.email = props.email;
+    user.password = props.password; // 이미 해싱된 비밀번호
+    user.name = props.name;
+    user.personalPhone = props.personalPhone;
+    user.companyPhone = props.companyPhone ?? null;
+    user.role = props.role ?? Role.RETAILER; // 기본값: RETAILER
+
+    return user;
   }
 
-  get role(): Role {
-    return this._role;
+  // ======================= 조회 =======================
+
+  // 역할 확인
+  isAdmin(): boolean {
+    return this.role === Role.ADMIN;
   }
 
-  get email(): string {
-    return this._email;
+  isWholesaler(): boolean {
+    return this.role === Role.WHOLESALER;
   }
 
-  get password(): string {
-    return this._password;
+  isRetailer(): boolean {
+    return this.role === Role.RETAILER;
   }
 
-  get name(): string {
-    return this._name;
-  }
-
-  get phone(): string {
-    return this._phone;
-  }
-
-  get createdAt(): Date {
-    return this._createdAt;
-  }
-
-  get updatedAt(): Date {
-    return this._updatedAt;
-  }
-
-  get deletedAt(): Date | null | undefined {
-    return this._deletedAt;
-  }
-
-  get lastLoginAt(): Date | null | undefined {
-    return this._lastLoginAt;
-  }
-
-  // User Aggregate 내부 Relations Getters
-  get businessInfo(): BusinessInfo | null | undefined {
-    return this._businessInfo;
-  }
-
-  get shippingAddresses(): ShippingAddress[] | undefined {
-    return this._shippingAddresses;
-  }
-
-  // 더티 체킹 관련 메서드
-  getDirtyFields(): Set<string> {
-    return this._dirtyFields;
-  }
-
-  clearDirtyFields(): void {
-    this._dirtyFields.clear();
-  }
-
-  // 삭제 여부 확인
+  // 상태 확인
   isDeleted(): boolean {
-    return this._deletedAt !== null && this._deletedAt !== undefined;
+    return this.deletedAt !== null;
   }
 
-  // 활성 사용자 확인
   isActive(): boolean {
     return !this.isDeleted();
   }
 
-  // 관리자 권한 확인
-  isAdmin(): boolean {
-    return this._role === Role.ADMIN;
-  }
-
-  // 도매자 권한 확인
-  isWholesaler(): boolean {
-    return this._role === Role.WHOLESALER;
-  }
-
-  // 소비자 권한 확인
-  isRetailer(): boolean {
-    return this._role === Role.RETAILER;
-  }
+  // ======================= 수정 =======================
 
   // 로그인 기록
   recordLogin(): void {
-    this._lastLoginAt = new Date();
-    this._updatedAt = new Date();
-    this._dirtyFields.add('lastLoginAt');
-    this._dirtyFields.add('updatedAt');
+    this.lastLoginAt = new Date();
   }
 
-  // 정보 업데이트
-  updateInfo(name?: string, phone?: string): void {
+  // 정보 수정
+  updateInfo(props: UpdateUserProps): void {
     if (this.isDeleted()) {
-      throw new Error('삭제된 사용자는 정보를 수정할 수 없습니다.');
+      throw new BadRequestException(
+        '삭제된 사용자는 정보를 수정할 수 없습니다',
+      );
     }
 
-    if (name !== undefined) {
-      this._name = name;
-      this._dirtyFields.add('name');
-    }
-    if (phone !== undefined) {
-      this._phone = phone;
-      this._dirtyFields.add('phone');
-    }
-    this._updatedAt = new Date();
-    this._dirtyFields.add('updatedAt');
+    this.name = props.name ?? this.name;
+    this.personalPhone = props.personalPhone ?? this.personalPhone;
+    this.companyPhone = props.companyPhone ?? this.companyPhone;
   }
 
-  // 비즈니스 로직: 비밀번호 업데이트
+  // 비밀번호 변경
   updatePassword(hashedPassword: string): void {
     if (this.isDeleted()) {
-      throw new Error('삭제된 사용자는 비밀번호를 변경할 수 없습니다.');
+      throw new BadRequestException(
+        '삭제된 사용자는 비밀번호를 변경할 수 없습니다',
+      );
     }
-    this._password = hashedPassword;
-    this._updatedAt = new Date();
-    this._dirtyFields.add('password');
-    this._dirtyFields.add('updatedAt');
+
+    this.password = hashedPassword;
   }
 
-  // 비즈니스 로직: Soft Delete
-  delete(): void {
+  // ======================= 삭제 =======================
+
+  // 계정 삭제 (소프트 삭제)
+  softDelete(): void {
     if (this.isDeleted()) {
-      throw new Error('이미 삭제된 사용자입니다.');
+      throw new BadRequestException('이미 삭제된 사용자입니다');
     }
-    this._deletedAt = new Date();
-    this._updatedAt = new Date();
-    this._dirtyFields.add('deletedAt');
-    this._dirtyFields.add('updatedAt');
-  }
-
-  // Factory 메서드: 신규 사용자 생성
-  static create(params: {
-    id: string;
-    email: string;
-    password: string;
-    name: string;
-    phone: string;
-    role?: Role;
-  }): User {
-    const now = new Date();
-    return new User({
-      id: params.id,
-      role: params.role ?? Role.RETAILER,
-      email: params.email,
-      password: params.password,
-      name: params.name,
-      phone: params.phone,
-      createdAt: now,
-      updatedAt: now,
-      deletedAt: null,
-      lastLoginAt: null,
-    });
+    this.deletedAt = new Date();
   }
 }

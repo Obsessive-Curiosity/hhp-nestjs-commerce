@@ -1,36 +1,18 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { RBAC } from '@/auth/decorators/rbac.decorator';
-import { Role } from '@prisma/client';
-import { CouponFacadeService } from '@/coupon/application/coupon.facade';
-import {
-  CreateOrderCouponDto,
-  CreateCategoryCouponDto,
-  CreateProductCouponDto,
-} from '../dto';
+import { Role } from '@/user/domain/entity/user.entity';
+import { CouponFacade } from '@/coupon/application/coupon.facade';
+import { CreateOrderCouponDto } from '../dto';
 
 @RBAC([Role.ADMIN])
 @Controller('/admin/coupon')
 export class CouponAdminController {
-  constructor(private readonly couponFacade: CouponFacadeService) {}
+  constructor(private readonly couponFacade: CouponFacade) {}
 
-  // 쿠폰 생성 - 범위: 주문
+  // 쿠폰 생성
   @Post()
-  createOrderCoupon(@Body() createOrderCouponDto: CreateOrderCouponDto) {
+  createCoupon(@Body() createOrderCouponDto: CreateOrderCouponDto) {
     return this.couponFacade.createOrderCoupon(createOrderCouponDto);
-  }
-
-  // 쿠폰 생성 - 범위: 카테고리
-  @Post('category')
-  createCategoryCoupon(
-    @Body() createCategoryCouponDto: CreateCategoryCouponDto,
-  ) {
-    return this.couponFacade.createCategoryCoupon(createCategoryCouponDto);
-  }
-
-  // 쿠폰 생성 - 범위: 상품
-  @Post('product')
-  createProductCoupon(@Body() createProductCouponDto: CreateProductCouponDto) {
-    return this.couponFacade.createProductCoupon(createProductCouponDto);
   }
 
   // 모든 쿠폰 조회 (관리자)

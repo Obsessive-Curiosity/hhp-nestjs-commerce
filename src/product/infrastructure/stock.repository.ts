@@ -1,52 +1,56 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '@/prisma/prisma.service';
-import { ProductStock as PrismaProductStock } from '@prisma/client';
+import { EntityManager } from '@mikro-orm/mysql';
 import { ProductStock } from '../domain/entity/product-stock.entity';
+import { Product } from '../domain/entity/product.entity';
 import { IStockRepository } from '../domain/interface/stock.repository.interface';
 
 @Injectable()
 export class StockRepository implements IStockRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly em: EntityManager) {}
 
-  // read: DB → Entity
-  private toDomain(row: PrismaProductStock): ProductStock {
-    return new ProductStock({
-      productId: row.productId,
-      quantity: row.quantity,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-      version: row.version,
-    });
-  }
+  // ==================== 조회 (Query) ====================
 
-  // write: Entity → DB
-  private fromDomain(stock: ProductStock) {
-    return {
-      productId: stock.productId,
-      quantity: stock.quantity,
-      createdAt: stock.createdAt,
-      updatedAt: stock.updatedAt,
-      version: stock.version,
-    };
-  }
-
+  // 상품별 재고 조회
   async findByProductId(productId: string): Promise<ProductStock | null> {
-    const stock = await this.prisma.productStock.findUnique({
-      where: { productId },
-    });
-
-    return stock ? this.toDomain(stock) : null;
+    return await this.em.findOne(ProductStock, { product: productId });
   }
 
+  // 재고 수량 조회
+  async getQuantity(productId: string): Promise<number> {
+    const stock = await this.em.findOne(ProductStock, { product: productId });
+    return stock?.quantity ?? 0;
+  }
+
+  // 재고 존재 여부 확인
+  async exists(productId: string): Promise<boolean> {
+    const count = await this.em.count(ProductStock, { product: productId });
+    return count > 0;
+  }
+
+  // ==================== 생성 (Create) ====================
+
+  // 재고 저장
   async create(stock: ProductStock): Promise<ProductStock> {
-    const data = this.fromDomain(stock);
-
-    const created = await this.prisma.productStock.create({
-      data,
-    });
-
-    return this.toDomain(created);
+    await this.em.persistAndFlush(stock);
+    return stock;
   }
+
+  // 재고 생성
+  async createStock(
+    productId: string,
+    initialQuantity: number,
+  ): Promise<ProductStock> {
+    const stock = new ProductStock();
+
+    // em.getReference() 사용: DB 조회 없이 Product 참조만 생성
+    stock.product = this.em.getReference(Product, productId);
+    stock.quantity = initialQuantity;
+
+    await this.em.persistAndFlush(stock);
+    return stock;
+  }
+
+  // ==================== 수정 (Update) ====================
 
   // 낙관적 락을 사용한 재고 증가
   async increaseWithVersion(
@@ -54,26 +58,20 @@ export class StockRepository implements IStockRepository {
     quantity: number,
     currentVersion: number,
   ): Promise<void> {
-    const result = await this.prisma.productStock.updateMany({
-      where: {
-        productId,
-        version: currentVersion, // Optimistic Lock: 현재 버전과 일치해야 성공
-      },
-      data: {
-        quantity: {
-          increment: quantity,
-        },
-        version: {
-          increment: 1,
-        },
-      },
+    const stock = await this.em.findOne(ProductStock, {
+      product: productId,
+      version: currentVersion,
     });
 
-    if (result.count === 0) {
+    if (!stock) {
       throw new Error(
         '재고 증가 실패: 다른 트랜잭션에 의해 변경되었습니다. 다시 시도해주세요.',
       );
     }
+
+    stock.quantity += quantity;
+
+    await this.em.flush();
   }
 
   // 낙관적 락을 사용한 재고 감소
@@ -82,45 +80,25 @@ export class StockRepository implements IStockRepository {
     quantity: number,
     currentVersion: number,
   ): Promise<void> {
-    const result = await this.prisma.productStock.updateMany({
-      where: {
-        productId,
-        version: currentVersion, // Optimistic Lock: 현재 버전과 일치해야 성공
-        quantity: {
-          gte: quantity, // 재고 충분 여부 확인
-        },
-      },
-      data: {
-        quantity: {
-          decrement: quantity,
-        },
-        version: {
-          increment: 1,
-        },
-      },
+    const stock = await this.em.findOne(ProductStock, {
+      product: productId,
+      version: currentVersion,
     });
 
-    if (result.count === 0) {
+    if (!stock) {
       throw new Error(
         '재고 감소 실패: 재고가 부족하거나 다른 트랜잭션에 의해 변경되었습니다.',
       );
     }
-  }
 
-  async getQuantity(productId: string): Promise<number> {
-    const stock = await this.prisma.productStock.findUnique({
-      where: { productId },
-      select: { quantity: true },
-    });
+    if (stock.quantity < quantity) {
+      throw new Error(
+        '재고 감소 실패: 재고가 부족하거나 다른 트랜잭션에 의해 변경되었습니다.',
+      );
+    }
 
-    return stock?.quantity ?? 0;
-  }
+    stock.quantity -= quantity;
 
-  async exists(productId: string): Promise<boolean> {
-    const count = await this.prisma.productStock.count({
-      where: { productId },
-    });
-
-    return count > 0;
+    await this.em.flush();
   }
 }

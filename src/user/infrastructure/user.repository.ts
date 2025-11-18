@@ -1,109 +1,55 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '@/prisma/prisma.service';
-import { User as PrismaUser } from '@prisma/client';
+import { EntityManager } from '@mikro-orm/mysql';
 import { User } from '../domain/entity/user.entity';
 import { IUserRepository } from '../domain/interface/user.repository.interface';
-import { assignDirtyFields } from '@/common/utils/repository.utils';
 
 @Injectable()
 export class UserRepository implements IUserRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly em: EntityManager) {}
 
-  // read: DB → Entity
-  private toDomain(row: PrismaUser): User {
-    return new User({
-      id: row.id,
-      role: row.role,
-      email: row.email,
-      password: row.password,
-      name: row.name,
-      phone: row.phone,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-      deletedAt: row.deletedAt ?? null,
-      lastLoginAt: row.lastLoginAt ?? null,
-    });
-  }
+  // ==================== 조회 (Query) ====================
 
-  // write: Entity → DB
-  private fromDomain(user: User): PrismaUser {
-    return {
-      id: user.id,
-      role: user.role,
-      email: user.email,
-      password: user.password,
-      name: user.name,
-      phone: user.phone,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-      deletedAt: user.deletedAt ?? null,
-      lastLoginAt: user.lastLoginAt ?? null,
-    };
-  }
-
+  // ID로 사용자 존재 여부 확인
   async existsById(id: string): Promise<boolean> {
-    const count = await this.prisma.user.count({
-      where: { id, deletedAt: null },
-    });
-
-    return !!count;
+    const count = await this.em.count(User, { id });
+    return count > 0;
   }
 
+  // ID로 사용자 조회
   async findById(id: string): Promise<User | null> {
-    const userData = await this.prisma.user.findUnique({
-      where: { id, deletedAt: null },
-    });
-
-    return userData ? this.toDomain(userData) : null;
+    return await this.em.findOne(User, { id });
   }
 
+  // 이메일로 사용자 조회
   async findByEmail(email: string): Promise<User | null> {
-    const userData = await this.prisma.user.findUnique({
-      where: { email, deletedAt: null },
-    });
-
-    return userData ? this.toDomain(userData) : null;
+    return await this.em.findOne(User, { email });
   }
 
-  async save(user: User): Promise<User> {
-    const savedUser = await this.prisma.user.create({
-      data: this.fromDomain(user),
-    });
+  // ==================== 생성 (Create) ====================
 
-    return this.toDomain(savedUser);
+  // 사용자 생성
+  async create(user: User): Promise<User> {
+    await this.em.persistAndFlush(user);
+    return user;
   }
 
+  // ==================== 수정 (Update) ====================
+
+  // 사용자 정보 수정
   async update(user: User): Promise<User> {
-    const dirtyFields = user.getDirtyFields();
-
-    // 변경된 필드가 없으면 DB 쿼리 스킵
-    if (dirtyFields.size === 0) {
-      return user;
-    }
-
-    // 변경된 필드만 추출
-    const fullData = this.fromDomain(user);
-    const updateData: Partial<PrismaUser> = {};
-
-    assignDirtyFields(fullData, updateData, [
-      ...dirtyFields,
-    ] as (keyof PrismaUser)[]);
-
-    const updatedUser = await this.prisma.user.update({
-      where: { id: user.id },
-      data: updateData,
-    });
-
-    const result = this.toDomain(updatedUser);
-    result.clearDirtyFields(); // 업데이트 후 변경 추적 초기화
-
-    return result;
+    await this.em.flush();
+    return user;
   }
 
-  async delete(userId: string): Promise<void> {
-    await this.prisma.user.update({
-      where: { id: userId, deletedAt: null },
-      data: { deletedAt: new Date() },
-    });
+  // ==================== 삭제 (Delete) ====================
+
+  // 단일 삭제: Soft Delete (deletedAt 설정)
+  async softDelete(userId: string): Promise<void> {
+    const user = await this.em.findOne(User, { id: userId });
+
+    if (user) {
+      user.softDelete();
+      await this.em.flush();
+    }
   }
 }

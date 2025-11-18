@@ -1,4 +1,4 @@
-import { Role } from '@prisma/client';
+import { Role } from '@/user/domain/entity/user.entity';
 
 export interface RolePermissions {
   isB2C: boolean;
