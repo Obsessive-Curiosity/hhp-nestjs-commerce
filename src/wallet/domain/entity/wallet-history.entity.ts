@@ -1,4 +1,4 @@
-import { Entity, PrimaryKey, Property, Enum, t } from '@mikro-orm/core';
+import { Entity, PrimaryKey, Property, Enum, t, Index } from '@mikro-orm/core';
 import { BadRequestException } from '@nestjs/common';
 import { v7 as uuidv7 } from 'uuid';
 
@@ -17,6 +17,8 @@ export type CreateWalletHistoryProps = {
 };
 
 @Entity({ tableName: 'wallet_history' })
+@Index({ name: 'fk_wallet_history_userId', properties: ['userId'] })
+@Index({ name: 'fk_wallet_history_orderId', properties: ['orderId'] })
 export class WalletHistory {
   @PrimaryKey({ type: t.character, length: 36 })
   id: string = uuidv7();

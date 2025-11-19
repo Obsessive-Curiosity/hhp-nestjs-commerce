@@ -5,6 +5,7 @@ import {
   ManyToOne,
   OneToOne,
   t,
+  Index,
 } from '@mikro-orm/core';
 import { v7 as uuidv7 } from 'uuid';
 import { BadRequestException } from '@nestjs/common';
@@ -23,6 +24,7 @@ export type CreateProductProps = {
 };
 
 @Entity()
+@Index({ name: 'fk_product_categoryId', properties: ['categoryId'] })
 export class Product {
   @PrimaryKey({ type: t.character, length: 36 })
   id: string = uuidv7();

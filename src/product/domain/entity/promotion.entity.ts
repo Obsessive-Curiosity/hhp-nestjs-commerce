@@ -1,4 +1,4 @@
-import { Entity, PrimaryKey, Property, t } from '@mikro-orm/core';
+import { Entity, PrimaryKey, Property, t, Index } from '@mikro-orm/core';
 import { v7 as uuidv7 } from 'uuid';
 import { BadRequestException } from '@nestjs/common';
 import dayjs from 'dayjs';
@@ -12,6 +12,7 @@ export type CreatePromotionProps = {
 };
 
 @Entity()
+@Index({ name: 'fk_promotion_productId', properties: ['productId'] })
 export class Promotion {
   @PrimaryKey({ type: t.character, length: 36 })
   id: string = uuidv7();
