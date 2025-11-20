@@ -7,6 +7,12 @@ export interface IStockRepository {
   // 재고 생성
   create(stock: ProductStock): Promise<ProductStock>;
 
+  // 재고 생성 (productId 기반)
+  createStock(
+    productId: string,
+    initialQuantity: number,
+  ): Promise<ProductStock>;
+
   // 재고 증가 (Optimistic Locking)
   increaseWithVersion(
     productId: string,

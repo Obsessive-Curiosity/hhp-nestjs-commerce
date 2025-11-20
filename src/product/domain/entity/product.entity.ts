@@ -1,119 +1,110 @@
-import { Category, ProductStock } from '@prisma/client';
+import {
+  Entity,
+  PrimaryKey,
+  Property,
+  t,
+  Index,
+  ManyToOne,
+  OneToOne,
+  Cascade,
+} from '@mikro-orm/core';
+import { v7 as uuidv7 } from 'uuid';
+import { BadRequestException } from '@nestjs/common';
+import { Category } from '@/category/domain/entity/category.entity';
+import { ProductStock } from './product-stock.entity';
 
-export interface ProductProps {
-  id: string;
+export type CreateProductProps = {
   categoryId: number;
   name: string;
-  retailPrice: number | null;
-  wholesalePrice: number | null;
+  retailPrice?: number | null;
+  wholesalePrice?: number | null;
   description: string;
-  imageUrl: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  deletedAt?: Date | null;
+  imageUrl?: string | null;
+};
 
-  // Relations
-  category?: Category;
-  stock?: ProductStock | null;
-}
-
+@Entity()
+@Index({ name: 'fk_product_categoryId', properties: ['categoryId'] })
 export class Product {
-  private readonly _id: string;
-  private _categoryId: number;
-  private _name: string;
-  private _retailPrice: number | null;
-  private _wholesalePrice: number | null;
-  private _description: string;
-  private _imageUrl: string | null;
-  private readonly _createdAt: Date;
-  private _updatedAt: Date;
-  private _deletedAt?: Date | null;
+  @PrimaryKey({ type: t.character, length: 36 })
+  id: string = uuidv7();
 
-  // Relations
-  private _category?: Category;
-  private _stock?: ProductStock | null;
+  @Property()
+  categoryId!: number;
 
-  // 더티 체킹
-  private _dirtyFields: Set<string> = new Set();
+  @ManyToOne(() => Category, {
+    fieldName: 'categoryId', // 외래 키 매핑
+    persist: false, // 조회 전용
+  })
+  category!: Category;
 
-  constructor(props: ProductProps) {
-    this._id = props.id;
-    this._categoryId = props.categoryId;
-    this._name = props.name;
-    this._retailPrice = props.retailPrice;
-    this._wholesalePrice = props.wholesalePrice;
-    this._description = props.description;
-    this._imageUrl = props.imageUrl;
-    this._createdAt = props.createdAt;
-    this._updatedAt = props.updatedAt;
-    this._deletedAt = props.deletedAt;
+  @OneToOne(() => ProductStock, {
+    cascade: [Cascade.REMOVE],
+    orphanRemoval: true,
+  })
+  stock!: ProductStock;
 
-    // Relations
-    this._category = props.category;
-    this._stock = props.stock;
+  @Property()
+  name!: string;
+
+  // 소매가 (B2C 가격)
+  @Property({ type: t.decimal, precision: 15, scale: 2, nullable: true })
+  retailPrice!: number | null;
+
+  // 도매가 (B2B 가격)
+  @Property({ type: t.decimal, precision: 15, scale: 2, nullable: true })
+  wholesalePrice!: number | null;
+
+  // 상품 설명
+  @Property({ type: t.text })
+  description!: string;
+
+  // 상품 이미지 URL
+  @Property({ nullable: true })
+  imageUrl: string | null = null;
+
+  // 상품 생성일
+  @Property({ onCreate: () => new Date() })
+  createdAt: Date;
+
+  // 상품 수정일
+  @Property({ onUpdate: () => new Date() })
+  updatedAt: Date;
+
+  // 상품 삭제일 (null = 삭제되지 않음, Soft Delete)
+  @Property({ nullable: true })
+  deletedAt!: Date | null;
+
+  // =================== Constructor ===================
+
+  protected constructor(data?: Partial<Product>) {
+    if (data) {
+      Object.assign(this, data);
+    }
   }
 
-  // Getters
-  get id(): string {
-    return this._id;
+  // ================== Factory (생성) ==================
+
+  // Factory 메서드: 신규 상품 생성
+  static create(params: CreateProductProps): Product {
+    const product = new Product();
+    product.categoryId = params.categoryId;
+    product.name = params.name;
+    product.retailPrice = params.retailPrice ?? null;
+    product.wholesalePrice = params.wholesalePrice ?? null;
+    product.description = params.description;
+    product.imageUrl = params.imageUrl ?? null;
+
+    // BR-006: 가격 검증
+    product.validatePricing();
+
+    return product;
   }
 
-  get categoryId(): number {
-    return this._categoryId;
-  }
-
-  get name(): string {
-    return this._name;
-  }
-
-  get retailPrice(): number | null {
-    return this._retailPrice;
-  }
-
-  get wholesalePrice(): number | null {
-    return this._wholesalePrice;
-  }
-
-  get description(): string {
-    return this._description;
-  }
-
-  get imageUrl(): string | null {
-    return this._imageUrl;
-  }
-
-  get createdAt(): Date {
-    return this._createdAt;
-  }
-
-  get updatedAt(): Date {
-    return this._updatedAt;
-  }
-
-  get deletedAt(): Date | null | undefined {
-    return this._deletedAt;
-  }
-
-  get category(): Category | undefined {
-    return this._category;
-  }
-
-  get stock(): ProductStock | null | undefined {
-    return this._stock;
-  }
-
-  // 더티 체킹 관련 메서드
-  getDirtyFields(): Set<string> {
-    return this._dirtyFields;
-  }
-
-  clearDirtyFields(): void {
-    this._dirtyFields.clear();
-  }
+  // ======================= 조회 =======================
 
   // 삭제 여부 확인
   isDeleted(): boolean {
-    return this._deletedAt !== null && this._deletedAt !== undefined;
+    return this.deletedAt !== null;
   }
 
   // 활성 상품 확인
@@ -121,28 +112,7 @@ export class Product {
     return !this.isDeleted();
   }
 
-  // 재고 확인
-  hasStock(quantity: number): boolean {
-    if (!this._stock) return false;
-    return this._stock.quantity >= quantity;
-  }
-
-  // 재고 없음 확인
-  isOutOfStock(): boolean {
-    if (!this._stock) return true;
-    return this._stock.quantity <= 0;
-  }
-
-  // BR-006: B2B 가격은 B2C보다 낮아야 함
-  validatePricing(): void {
-    if (this._retailPrice && this._wholesalePrice) {
-      if (this._wholesalePrice >= this._retailPrice) {
-        throw new Error(
-          'B2B 가격(도매가)은 B2C 가격(소매가)보다 낮아야 합니다.',
-        );
-      }
-    }
-  }
+  // ======================= 수정 =======================
 
   // 상품 정보 업데이트
   updateInfo(params: {
@@ -154,79 +124,60 @@ export class Product {
     imageUrl?: string | null;
   }): void {
     if (this.isDeleted()) {
-      throw new Error('삭제된 상품은 수정할 수 없습니다.');
+      throw new BadRequestException('삭제된 상품은 수정할 수 없습니다.');
     }
 
-    if (params.name !== undefined) {
-      this._name = params.name;
-      this._dirtyFields.add('name');
+    if (params.name) {
+      this.name = params.name;
     }
-    if (params.categoryId !== undefined) {
-      this._categoryId = params.categoryId;
-      this._dirtyFields.add('categoryId');
+    if (params.categoryId) {
+      this.categoryId = params.categoryId;
     }
-    if (params.retailPrice !== undefined) {
-      this._retailPrice = params.retailPrice;
-      this._dirtyFields.add('retailPrice');
+    if (params.retailPrice) {
+      this.retailPrice = params.retailPrice;
     }
-    if (params.wholesalePrice !== undefined) {
-      this._wholesalePrice = params.wholesalePrice;
-      this._dirtyFields.add('wholesalePrice');
+    if (params.wholesalePrice) {
+      this.wholesalePrice = params.wholesalePrice;
     }
-    if (params.description !== undefined) {
-      this._description = params.description;
-      this._dirtyFields.add('description');
+    if (params.description) {
+      this.description = params.description;
     }
-    if (params.imageUrl !== undefined) {
-      this._imageUrl = params.imageUrl;
-      this._dirtyFields.add('imageUrl');
+    if (params.imageUrl) {
+      this.imageUrl = params.imageUrl;
     }
 
     // 가격 검증
     this.validatePricing();
-
-    this._updatedAt = new Date();
-    this._dirtyFields.add('updatedAt');
   }
+
+  // ======================= 삭제 =======================
 
   // Soft Delete
-  delete(): void {
+  softDelete(): void {
     if (this.isDeleted()) {
-      throw new Error('이미 삭제된 상품입니다.');
+      throw new BadRequestException('이미 삭제된 상품입니다.');
     }
-    this._deletedAt = new Date();
-    this._updatedAt = new Date();
-    this._dirtyFields.add('deletedAt');
-    this._dirtyFields.add('updatedAt');
+    this.deletedAt = new Date();
   }
 
-  // Factory 메서드: 신규 상품 생성
-  static create(params: {
-    id: string;
-    categoryId: number;
-    name: string;
-    retailPrice: number | null;
-    wholesalePrice: number | null;
-    description: string;
-    imageUrl?: string | null;
-  }): Product {
-    const now = new Date();
-    const product = new Product({
-      id: params.id,
-      categoryId: params.categoryId,
-      name: params.name,
-      retailPrice: params.retailPrice,
-      wholesalePrice: params.wholesalePrice,
-      description: params.description,
-      imageUrl: params.imageUrl ?? null,
-      createdAt: now,
-      updatedAt: now,
-      deletedAt: null,
-    });
+  // ======================= 검증 =======================
 
-    // BR-006: 가격 검증
-    product.validatePricing();
+  // BR-006: B2B 가격은 B2C보다 낮아야 함
+  private validatePricing(): void {
+    // 소매가 또는 도매가 중 최소 하나는 있어야 함
+    if (this.retailPrice === null && this.wholesalePrice === null) {
+      throw new BadRequestException(
+        '소매가 또는 도매가 중 최소 하나는 입력해야 합니다.',
+      );
+    }
 
-    return product;
+    // 둘 다 있을 경우, 도매가가 소매가보다 낮아야 함
+    if (this.retailPrice !== null && this.wholesalePrice !== null) {
+      if (this.wholesalePrice >= this.retailPrice) {
+        throw new BadRequestException(
+          'B2B 가격(도매가)은 B2C 가격(소매가)보다 낮아야 합니다.',
+        );
+      }
+    }
   }
 }

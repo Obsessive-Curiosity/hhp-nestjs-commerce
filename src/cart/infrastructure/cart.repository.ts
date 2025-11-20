@@ -11,10 +11,15 @@ export class CartRepository implements ICartRepository {
 
   constructor(private readonly redisService: RedisService) {}
 
+  // ==================== Helper ====================
+
   private getCartKey(userId: string): string {
     return `${this.CART_KEY_PREFIX}${userId}`;
   }
 
+  // ==================== 조회 (Query) ====================
+
+  // 사용자 장바구니 조회
   async findByUserId(userId: string): Promise<Cart | null> {
     const redis = this.redisService.getCacheClient();
     const key = this.getCartKey(userId);
@@ -38,6 +43,9 @@ export class CartRepository implements ICartRepository {
     }
   }
 
+  // ==================== 생성/수정 (Create/Update) ====================
+
+  // 장바구니 상품 추가/수정
   async setItem(
     userId: string,
     productId: string,
@@ -64,6 +72,9 @@ export class CartRepository implements ICartRepository {
     }
   }
 
+  // ==================== 삭제 (Delete) ====================
+
+  // 장바구니 상품 삭제
   async deleteItem(userId: string, productId: string): Promise<void> {
     const redis = this.redisService.getCacheClient();
     const key = this.getCartKey(userId);
@@ -88,6 +99,7 @@ export class CartRepository implements ICartRepository {
     }
   }
 
+  // 장바구니 전체 삭제
   async delete(userId: string): Promise<void> {
     const redis = this.redisService.getCacheClient();
     const key = this.getCartKey(userId);

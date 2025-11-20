@@ -3,12 +3,12 @@
 ```mermaid
 erDiagram
     users ||--o| business_info : "has (optional)"
-    users ||--o| points : "has"
+    users ||--o| wallet : "has"
     users ||--o{ user_coupons : "has (optional)"
     users ||--o{ orders : "has (optional)"
     users ||--o{ shipping_addresses : "has (optional)"
 
-    points ||--|{ point_histories : "contains"
+    wallet ||--|{ wallet_history : "contains"
 
     categories ||--|{ products : "contains"
     categories ||--o{ coupon_categories : "applicable to"
@@ -50,15 +50,15 @@ erDiagram
         timestamp created_at
     }
 
-    points {
+    wallet {
         string user_id PK,FK
-        integer amount
+        integer balance
         integer version
         timestamp created_at
         timestamp updated_at
     }
 
-    point_histories {
+    wallet_history {
         string id PK
         string user_id FK
         string order_id FK

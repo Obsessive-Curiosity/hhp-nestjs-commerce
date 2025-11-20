@@ -1,195 +1,179 @@
-export interface PromotionProps {
-  id: string;
+import { Entity, PrimaryKey, Property, t, Index } from '@mikro-orm/core';
+import { v7 as uuidv7 } from 'uuid';
+import { BadRequestException } from '@nestjs/common';
+import dayjs from 'dayjs';
+
+export type CreatePromotionProps = {
   productId: string;
   paidQuantity: number;
   freeQuantity: number;
   startAt: Date;
-  endAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
+  endAt?: Date | null;
+};
 
+@Entity()
+@Index({ name: 'fk_promotion_productId', properties: ['productId'] })
 export class Promotion {
-  private readonly _id: string;
-  private readonly _productId: string;
-  private _paidQuantity: number;
-  private _freeQuantity: number;
-  private _startAt: Date;
-  private _endAt: Date | null;
-  private readonly _createdAt: Date;
-  private _updatedAt: Date;
+  @PrimaryKey({ type: t.character, length: 36 })
+  id: string = uuidv7();
 
-  // 더티 체킹
-  private _dirtyFields: Set<string> = new Set();
+  // Product 엔티티를 참조 (N:1 관계)
+  @Property({ type: t.character, length: 36 })
+  productId!: string;
 
-  constructor(props: PromotionProps) {
-    this._id = props.id;
-    this._productId = props.productId;
-    this._paidQuantity = props.paidQuantity;
-    this._freeQuantity = props.freeQuantity;
-    this._startAt = props.startAt;
-    this._endAt = props.endAt;
-    this._createdAt = props.createdAt;
-    this._updatedAt = props.updatedAt;
+  // 유료 수량 (N+M에서 N)
+  @Property({ type: t.integer })
+  paidQuantity!: number;
+
+  // 무료 수량 (N+M에서 M)
+  @Property({ type: t.integer })
+  freeQuantity!: number;
+
+  // 프로모션 시작일
+  @Property({ type: t.datetime })
+  startAt!: Date;
+
+  // 프로모션 종료일 (null = 무기한)
+  @Property({ type: t.datetime, nullable: true })
+  endAt: Date | null = null;
+
+  // 프로모션 생성일
+  @Property({ type: t.datetime, onCreate: () => new Date() })
+  createdAt: Date;
+
+  // 프로모션 수정일
+  @Property({ type: t.datetime, onUpdate: () => new Date() })
+  updatedAt: Date;
+
+  // =================== Constructor ===================
+
+  protected constructor(data?: Partial<Promotion>) {
+    if (data) {
+      Object.assign(this, data);
+    }
   }
 
-  // Getters
-  get id(): string {
-    return this._id;
+  // ================== Factory (생성) ==================
+
+  // Factory 메서드: 신규 프로모션 생성
+  static create(params: CreatePromotionProps): Promotion {
+    const promotion = new Promotion();
+    const { productId, paidQuantity, freeQuantity, startAt, endAt } = params;
+
+    // 검증
+    promotion.validateQuantities(paidQuantity, freeQuantity);
+    promotion.validatePeriod(startAt, endAt);
+
+    // 검증 통과 후 값 할당
+    promotion.productId = productId;
+    promotion.paidQuantity = paidQuantity;
+    promotion.freeQuantity = freeQuantity;
+    promotion.startAt = startAt;
+    promotion.endAt = endAt ?? null;
+
+    return promotion;
   }
 
-  get productId(): string {
-    return this._productId;
-  }
-
-  get paidQuantity(): number {
-    return this._paidQuantity;
-  }
-
-  get freeQuantity(): number {
-    return this._freeQuantity;
-  }
-
-  get startAt(): Date {
-    return this._startAt;
-  }
-
-  get endAt(): Date | null {
-    return this._endAt;
-  }
-
-  get createdAt(): Date {
-    return this._createdAt;
-  }
-
-  get updatedAt(): Date {
-    return this._updatedAt;
-  }
-
-  // 더티 체킹 관련 메서드
-  getDirtyFields(): Set<string> {
-    return this._dirtyFields;
-  }
-
-  clearDirtyFields(): void {
-    this._dirtyFields.clear();
-  }
+  // ======================= 조회 =======================
 
   // 프로모션 형식 문자열 반환 (예: "10+1")
   getPromotionFormat(): string {
-    return `${this._paidQuantity}+${this._freeQuantity}`;
+    return `${this.paidQuantity}+${this.freeQuantity}`;
   }
 
   // 프로모션 활성 여부 확인
   isActive(now: Date = new Date()): boolean {
-    const isStarted = this._startAt <= now;
-    const isNotEnded = this._endAt === null || this._endAt >= now;
-    return isStarted && isNotEnded;
+    const isStarted = this.startAt <= now;
+    const endNextDay = this.getEndNextDay();
+    const isEnded = endNextDay ? endNextDay <= now : false;
+
+    return isStarted && !isEnded;
   }
 
   // 프로모션 만료 확인
   isExpired(now: Date = new Date()): boolean {
-    if (this._endAt === null) return false;
-    return this._endAt < now;
+    const endNextDay = this.getEndNextDay();
+    if (!endNextDay) return false;
+    return endNextDay <= now;
   }
 
   // 프로모션 시작 전 확인
   isNotStarted(now: Date = new Date()): boolean {
-    return this._startAt > now;
+    return now < this.startAt;
   }
 
-  // 기간 검증
-  validatePeriod(): void {
-    if (this._endAt && this._endAt <= this._startAt) {
-      throw new Error('프로모션 종료일은 시작일보다 나중이어야 합니다.');
-    }
+  // 프로모션 적용 가능한 세트 수
+  getApplicableSets(quantity: number): number {
+    if (quantity < this.paidQuantity) return 0;
+    return Math.floor(quantity / this.paidQuantity);
   }
 
-  // 수량 검증
-  validateQuantities(): void {
-    if (this._paidQuantity <= 0) {
-      throw new Error('유료 수량은 0보다 커야 합니다.');
-    }
-    if (this._freeQuantity <= 0) {
-      throw new Error('무료 수량은 0보다 커야 합니다.');
-    }
+  // 프로모션으로 받을 수 있는 무료 수량
+  getFreeQuantity(quantity: number): number {
+    const sets = this.getApplicableSets(quantity);
+    return sets * this.freeQuantity;
   }
 
-  // 프로모션 적용 가능한 세트 수 계산
-  calculateApplicableSets(quantity: number): number {
-    if (quantity < this._paidQuantity) return 0;
-    return Math.floor(quantity / this._paidQuantity);
-  }
-
-  // 프로모션으로 받을 수 있는 무료 수량 계산
-  calculateFreeQuantity(quantity: number): number {
-    const sets = this.calculateApplicableSets(quantity);
-    return sets * this._freeQuantity;
-  }
-
-  // 실제 지불해야 할 수량 계산
-  calculatePayableQuantity(quantity: number): number {
-    const freeQty = this.calculateFreeQuantity(quantity);
+  // 실제 지불해야 할 수량
+  getPayableQuantity(quantity: number): number {
+    const freeQty = this.getFreeQuantity(quantity);
     return quantity - freeQty;
   }
 
+  // ======================= 수정 =======================
+
   // 프로모션 정보 업데이트
-  updateInfo(params: {
+  update(params: {
     paidQuantity?: number;
     freeQuantity?: number;
     startAt?: Date;
     endAt?: Date | null;
   }): void {
-    if (params.paidQuantity !== undefined) {
-      this._paidQuantity = params.paidQuantity;
-      this._dirtyFields.add('paidQuantity');
-    }
-    if (params.freeQuantity !== undefined) {
-      this._freeQuantity = params.freeQuantity;
-      this._dirtyFields.add('freeQuantity');
-    }
-    if (params.startAt !== undefined) {
-      this._startAt = params.startAt;
-      this._dirtyFields.add('startAt');
-    }
-    if (params.endAt !== undefined) {
-      this._endAt = params.endAt;
-      this._dirtyFields.add('endAt');
-    }
+    const { paidQuantity, freeQuantity, startAt, endAt } = params;
+
+    // 업데이트될 값 준비
+    const newPaidQuantity = paidQuantity ?? this.paidQuantity;
+    const newFreeQuantity = freeQuantity ?? this.freeQuantity;
+    const newStartAt = startAt ?? this.startAt;
+    const newEndAt = endAt !== undefined ? endAt : this.endAt;
 
     // 검증
-    this.validateQuantities();
-    this.validatePeriod();
+    this.validateQuantities(newPaidQuantity, newFreeQuantity);
+    this.validatePeriod(newStartAt, newEndAt);
 
-    this._updatedAt = new Date();
-    this._dirtyFields.add('updatedAt');
+    // 검증 통과 후 값 업데이트
+    this.paidQuantity = newPaidQuantity;
+    this.freeQuantity = newFreeQuantity;
+    this.startAt = newStartAt;
+    this.endAt = newEndAt;
   }
 
-  // Factory 메서드: 신규 프로모션 생성
-  static create(params: {
-    id: string;
-    productId: string;
-    paidQuantity: number;
-    freeQuantity: number;
-    startAt: Date;
-    endAt?: Date | null;
-  }): Promotion {
-    const now = new Date();
-    const promotion = new Promotion({
-      id: params.id,
-      productId: params.productId,
-      paidQuantity: params.paidQuantity,
-      freeQuantity: params.freeQuantity,
-      startAt: params.startAt,
-      endAt: params.endAt ?? null,
-      createdAt: now,
-      updatedAt: now,
-    });
+  // ======================= 검증 =======================
 
-    // 검증
-    promotion.validateQuantities();
-    promotion.validatePeriod();
+  // 기간 검증
+  validatePeriod(startAt: Date, endAt?: Date | null): void {
+    if (endAt && endAt < startAt) {
+      throw new BadRequestException(
+        '프로모션 종료일은 시작일보다 나중이어야 합니다.',
+      );
+    }
+  }
 
-    return promotion;
+  // 수량 검증
+  validateQuantities(paidQuantity: number, freeQuantity: number): void {
+    if (paidQuantity <= 0) {
+      throw new BadRequestException('유료 수량은 0보다 커야 합니다.');
+    }
+    if (freeQuantity <= 0) {
+      throw new BadRequestException('무료 수량은 0보다 커야 합니다.');
+    }
+  }
+
+  // ================ Helper (private) =================
+
+  // endAt에 1일을 더한 날짜 반환 (프로모션 실질적 종료 시점)
+  private getEndNextDay(): Date | null {
+    if (!this.endAt) return null;
+    return dayjs(this.endAt).add(1, 'day').toDate();
   }
 }

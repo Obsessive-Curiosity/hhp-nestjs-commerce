@@ -1,23 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { OrderStatus, Role } from '@prisma/client';
+import { OrderStatus } from '../domain/entity/order.entity';
 import { OrderService } from '../domain/service/order.service';
 import { OrderItemService } from '../domain/service/order-item.service';
-import { CreateOrderUseCase } from './usecase/create-order.usecase';
-import { ProcessPaymentUseCase } from './usecase/process-payment.usecase';
-import { CancelOrderUseCase } from './usecase/cancel-order.usecase';
-
-interface CreateOrderItemInput {
-  productId: string;
-  quantity: number;
-}
-
-interface CreateOrderInput {
-  userId: string;
-  userRole: Role;
-  items: CreateOrderItemInput[];
-  couponIds?: string[];
-  deliveryRequest?: string;
-}
+import { CreateOrderUseCase } from './cross-domain/create-order.usecase';
+import { ProcessPaymentUseCase } from './cross-domain/process-payment.usecase';
+import { CancelOrderUseCase } from './cross-domain/cancel-order.usecase';
+import { CreateOrderDto } from '../presentation/dto';
+import { Payload } from '@/types/express';
 
 @Injectable()
 export class OrderFacade {
@@ -32,8 +21,8 @@ export class OrderFacade {
   /**
    * 주문 생성
    */
-  async createOrder(input: CreateOrderInput) {
-    return this.createOrderUseCase.execute(input);
+  async createOrder(user: Payload, dto: CreateOrderDto) {
+    return this.createOrderUseCase.execute(user, dto);
   }
 
   /**

@@ -10,14 +10,14 @@ export interface IUserRepository {
   // 이메일로 사용자 조회 (삭제된 사용자 제외)
   findByEmail(email: string): Promise<User | null>;
 
-  // 사용자 저장 (생성 또는 업데이트)
-  save(user: User): Promise<User>;
+  // 사용자 생성
+  create(user: User): Promise<User>;
 
-  // 사용자 업데이트
+  // 사용자 수정
   update(user: User): Promise<User>;
 
   // 사용자 삭제 (Soft Delete)
-  delete(userId: string): Promise<void>;
+  softDelete(userId: string): Promise<void>;
 }
 
 // Repository 의존성 주입을 위한 토큰

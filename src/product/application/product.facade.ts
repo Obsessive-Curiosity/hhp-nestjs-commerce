@@ -1,164 +1,136 @@
-import { Injectable } from '@nestjs/common';
-import { Payload } from '@/types/express';
+import { Injectable, Inject } from '@nestjs/common';
 import { ProductService } from '../domain/service/product.service';
 import { PromotionService } from '../domain/service/promotion.service';
 import { StockService } from '../domain/service/stock.service';
-import { CreateProductDto } from '../presentation/dto/create-product.dto';
-import { UpdateProductDto } from '../presentation/dto/update-product.dto';
-import { CreatePromotionsDto } from '../presentation/dto/create-promotion.dto';
-import { PrismaService } from '@/prisma/prisma.service';
+import {
+  IProductRepository,
+  PRODUCT_REPOSITORY,
+} from '../domain/interface/product.repository.interface';
+import {
+  UpdateProductProps,
+  CreatePromotionsProps,
+  GetProductsFilters,
+} from '../domain/types';
+import { Payload } from '@/types/express';
+import {
+  ProductListItemResponseDto,
+  ProductDetailResponseDto,
+  UpdateProductResponseDto,
+  PromotionResponseDto,
+  DeletePromotionResponseDto,
+  IncreaseStockResponseDto,
+  DecreaseStockResponseDto,
+} from './dto';
 
 @Injectable()
-export class ProductFacadeService {
+export class ProductFacade {
   constructor(
     private readonly productService: ProductService,
     private readonly stockService: StockService,
     private readonly promotionService: PromotionService,
-    private readonly prisma: PrismaService,
+    @Inject(PRODUCT_REPOSITORY)
+    private readonly productRepository: IProductRepository,
   ) {}
 
-  // 상품 생성 (관리자)
-  async createProduct(dto: CreateProductDto) {
-    return this.prisma.$transaction(async () => {
-      const { stock, ...rest } = dto;
-
-      // 1. Product 생성
-      const product = await this.productService.createProduct(rest);
-
-      // 2. Stock 생성
-      await this.stockService.createStock(product.id, stock);
-
-      return {
-        id: product.id,
-        categoryId: product.categoryId,
-        name: product.name,
-        retailPrice: product.retailPrice,
-        wholesalePrice: product.wholesalePrice,
-        description: product.description,
-        imageUrl: product.imageUrl,
-        createdAt: product.createdAt,
-      };
-    });
-  }
-
-  // 상품 수정 (관리자)
-  async updateProduct(id: string, dto: UpdateProductDto) {
-    // Product 정보만 수정 (재고는 별도 API로 관리)
-    const product = await this.productService.updateProduct(id, dto);
-
-    return {
-      id: product.id,
-      categoryId: product.categoryId,
-      name: product.name,
-      retailPrice: product.retailPrice,
-      wholesalePrice: product.wholesalePrice,
-      description: product.description,
-      imageUrl: product.imageUrl,
-      updatedAt: product.updatedAt,
-    };
-  }
-
-  // 재고 증가 (관리자 - 입고)
-  async increaseStock(productId: string, quantity: number, reason?: string) {
-    await this.stockService.increaseStock(productId, quantity);
-
-    return {
-      message: `상품 ${productId}의 재고가 ${quantity}개 증가했습니다.`,
-      reason,
-    };
-  }
-
-  // 재고 감소 (관리자 - 폐기/분실 등)
-  async decreaseStock(productId: string, quantity: number, reason?: string) {
-    await this.stockService.decreaseStock(productId, quantity);
-
-    return {
-      message: `상품 ${productId}의 재고가 ${quantity}개 감소했습니다.`,
-      reason,
-    };
-  }
+  // ==================== 조회 ====================
 
   // 상품 목록 조회
-  async getProducts(user?: Payload) {
-    const products = await this.productService.findAllProducts(user);
+  async getProducts(
+    filters?: GetProductsFilters,
+    user?: Payload,
+  ): Promise<ProductListItemResponseDto[]> {
+    const { role } = user || {};
+    const productsWithDetails =
+      await this.productRepository.findProductsWithDetails(filters, role);
 
-    return products.map((product) => ({
-      id: product.id,
-      categoryId: product.categoryId,
-      category: product.category,
-      name: product.name,
-      retailPrice: product.retailPrice,
-      wholesalePrice: product.wholesalePrice,
-      description: product.description,
-      imageUrl: product.imageUrl,
-      stock: product.stock,
-    }));
+    return productsWithDetails.map((data) =>
+      ProductListItemResponseDto.fromProductWithDetails(data),
+    );
   }
 
   // 상품 상세 조회
-  async getProduct(id: string, user?: Payload) {
-    const product = await this.productService.findProductById(id, user);
+  async getProduct(
+    id: string,
+    user?: Payload,
+  ): Promise<ProductDetailResponseDto | null> {
+    const { role } = user || {};
+    const productWithDetails =
+      await this.productRepository.findProductWithDetails(id, role);
 
-    if (!product) {
+    if (!productWithDetails) {
       return null;
     }
 
-    return {
-      id: product.id,
-      categoryId: product.categoryId,
-      category: product.category,
-      name: product.name,
-      retailPrice: product.retailPrice,
-      wholesalePrice: product.wholesalePrice,
-      description: product.description,
-      imageUrl: product.imageUrl,
-      stock: product.stock,
-      createdAt: product.createdAt,
-      updatedAt: product.updatedAt,
-    };
+    return ProductDetailResponseDto.fromProductWithDetails(productWithDetails);
   }
 
-  // 프로모션 생성 (관리자)
-  async createPromotions(productId: string, dto: CreatePromotionsDto) {
-    const promotions = await this.promotionService.create(productId, dto);
+  // 활성 프로모션 조회
+  async getActivePromotions(
+    productId: string,
+  ): Promise<PromotionResponseDto[]> {
+    const promotions =
+      await this.promotionService.getActivePromotions(productId);
 
-    return promotions.map((promotion) => ({
-      id: promotion.id,
-      productId: promotion.productId,
-      paidQuantity: promotion.paidQuantity,
-      freeQuantity: promotion.freeQuantity,
-      format: promotion.getPromotionFormat(),
-      startAt: promotion.startAt,
-      endAt: promotion.endAt,
-      createdAt: promotion.createdAt,
-    }));
+    return promotions.map((promotion) => PromotionResponseDto.from(promotion));
   }
 
-  // 프로모션 삭제 (관리자)
-  async deletePromotion(id: string) {
+  // ==================== 생성 ====================
+
+  // 프로모션 생성
+  async createPromotions(
+    productId: string,
+    props: CreatePromotionsProps,
+  ): Promise<PromotionResponseDto[]> {
+    const promotions = await this.promotionService.createPromotions(
+      productId,
+      props,
+    );
+
+    return promotions.map((promotion) =>
+      PromotionResponseDto.from(promotion, true),
+    );
+  }
+
+  // ==================== 수정 ====================
+
+  // 상품 수정
+  async updateProduct(
+    id: string,
+    props: UpdateProductProps,
+  ): Promise<UpdateProductResponseDto> {
+    const product = await this.productService.updateProduct(id, props);
+
+    return UpdateProductResponseDto.from(product);
+  }
+
+  // 재고 증가
+  async increaseStock(
+    productId: string,
+    quantity: number,
+    reason?: string,
+  ): Promise<IncreaseStockResponseDto> {
+    await this.stockService.increaseStock(productId, quantity);
+
+    return IncreaseStockResponseDto.from(productId, quantity, reason);
+  }
+
+  // 재고 감소
+  async decreaseStock(
+    productId: string,
+    quantity: number,
+    reason?: string,
+  ): Promise<DecreaseStockResponseDto> {
+    await this.stockService.decreaseStock(productId, quantity);
+
+    return DecreaseStockResponseDto.from(productId, quantity, reason);
+  }
+
+  // ==================== 삭제 ====================
+
+  // 프로모션 삭제
+  async deletePromotion(id: string): Promise<DeletePromotionResponseDto> {
     await this.promotionService.delete(id);
 
-    return {
-      message: '프로모션이 삭제되었습니다.',
-    };
-  }
-
-  // 상품의 활성 프로모션 조회
-  async getActivePromotion(productId: string) {
-    const promotion = await this.promotionService.getActivePromotion(productId);
-
-    if (!promotion) {
-      return null;
-    }
-
-    return {
-      id: promotion.id,
-      productId: promotion.productId,
-      paidQuantity: promotion.paidQuantity,
-      freeQuantity: promotion.freeQuantity,
-      format: promotion.getPromotionFormat(),
-      startAt: promotion.startAt,
-      endAt: promotion.endAt,
-    };
+    return DeletePromotionResponseDto.from();
   }
 }

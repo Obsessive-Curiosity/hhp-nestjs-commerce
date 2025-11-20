@@ -4,7 +4,6 @@ import * as bcrypt from 'bcrypt';
 @Injectable()
 export class PasswordService {
   private readonly SALT_ROUNDS = 10;
-  private readonly MIN_LENGTH = 8;
 
   // 비밀번호 해싱
   async hash(plainPassword: string): Promise<string> {

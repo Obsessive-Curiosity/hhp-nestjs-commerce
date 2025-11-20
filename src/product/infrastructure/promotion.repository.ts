@@ -1,158 +1,105 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '@/prisma/prisma.service';
-import { ProductPromotion as PrismaPromotion } from '@prisma/client';
+import { EntityManager } from '@mikro-orm/mysql';
 import { Promotion } from '../domain/entity/promotion.entity';
-import {
-  IPromotionRepository,
-  CreatePromotionData,
-} from '../domain/interface/promotion.repository.interface';
-import { assignDirtyFields } from '@/common/utils/repository.utils';
+import { IPromotionRepository } from '../domain/interface/promotion.repository.interface';
 
 @Injectable()
 export class PromotionRepository implements IPromotionRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly em: EntityManager) {}
 
-  // read: DB → Entity
-  private toDomain(row: PrismaPromotion): Promotion {
-    return new Promotion({
-      id: row.id,
-      productId: row.productId,
-      paidQuantity: row.paidQuantity,
-      freeQuantity: row.freeQuantity,
-      startAt: row.startAt,
-      endAt: row.endAt,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-    });
+  // ==================== 조회 (Query) ====================
+
+  // ID로 프로모션 조회
+  async findOne(id: string): Promise<Promotion | null> {
+    return await this.em.findOne(Promotion, { id });
   }
 
-  // write: Entity → DB
-  private fromDomain(promotion: Promotion) {
-    return {
-      id: promotion.id,
-      productId: promotion.productId,
-      paidQuantity: promotion.paidQuantity,
-      freeQuantity: promotion.freeQuantity,
-      startAt: promotion.startAt,
-      endAt: promotion.endAt,
-      createdAt: promotion.createdAt,
-      updatedAt: promotion.updatedAt,
-    };
+  // 상품의 모든 프로모션 조회
+  async find(productId: string): Promise<Promotion[]> {
+    return await this.em.find(
+      Promotion,
+      { productId },
+      { orderBy: { startAt: 'DESC' } },
+    );
   }
 
-  async findById(id: string): Promise<Promotion | null> {
-    const promotion = await this.prisma.productPromotion.findUnique({
-      where: { id },
-    });
-
-    return promotion ? this.toDomain(promotion) : null;
-  }
-
-  async findByProductId(productId: string): Promise<Promotion[]> {
-    const promotions = await this.prisma.productPromotion.findMany({
-      where: { productId },
-      orderBy: { startAt: 'desc' },
-    });
-
-    return promotions.map((p) => this.toDomain(p));
-  }
-
-  async findActiveByProductId(
+  // 상품의 모든 활성 프로모션 조회
+  async findActive(
     productId: string,
     now: Date = new Date(),
-  ): Promise<Promotion | null> {
-    const promotion = await this.prisma.productPromotion.findFirst({
-      where: {
-        productId,
-        startAt: { lte: now },
-        OR: [{ endAt: null }, { endAt: { gte: now } }],
-      },
-      orderBy: { startAt: 'desc' },
-    });
+  ): Promise<Promotion[]> {
+    // 1. 모든 프로모션 가져오기
+    const allPromotions = await this.find(productId);
 
-    return promotion ? this.toDomain(promotion) : null;
+    // 2. 도메인 로직(isActive)으로 필터링
+    return allPromotions.filter((promotion) => promotion.isActive(now));
   }
 
-  async existsByProductIdAndPaidQuantity(
+  // 겹치는 프로모션 존재 여부 확인
+  async existsOverlapping(
     productId: string,
     paidQuantity: number,
+    startAt: Date,
+    endAt: Date | null,
   ): Promise<boolean> {
-    const count = await this.prisma.productPromotion.count({
-      where: {
-        productId,
-        paidQuantity,
-      },
+    // 1. 같은 상품의 같은 paidQuantity를 가진 모든 프로모션 조회
+    const existingPromotions = await this.em.find(Promotion, {
+      productId,
+      paidQuantity,
     });
 
-    return count > 0;
-  }
+    // 2. 기간 겹침 확인
+    const hasOverlap = existingPromotions.some((existing) => {
+      // 새 프로모션이 기존 프로모션 시작 전에 끝나는 경우 -> 안 겹침
+      if (endAt && endAt < existing.startAt) {
+        return false;
+      }
 
-  async create(
-    productId: string,
-    promotionData: CreatePromotionData,
-  ): Promise<Promotion> {
-    const { paidQuantity, freeQuantity, startAt, endAt } = promotionData;
-    const createdPromotion = await this.prisma.productPromotion.create({
-      data: {
-        productId,
-        paidQuantity,
-        freeQuantity,
-        startAt: startAt ?? new Date(), // 없으면 현재 시간
-        endAt: endAt ?? null,
-      },
+      // 새 프로모션이 기존 프로모션 종료 후에 시작하는 경우 -> 안 겹침
+      if (existing.endAt && startAt > existing.endAt) {
+        return false;
+      }
+
+      // 그 외의 모든 경우는 겹침
+      return true;
     });
 
-    return this.toDomain(createdPromotion);
+    return hasOverlap;
   }
 
-  async createMany(
-    productId: string,
-    promotionsData: CreatePromotionData[],
-  ): Promise<Promotion[]> {
-    // Prisma createMany는 생성된 데이터를 반환하지 않으므로, 개별 create 사용
-    const created = await Promise.all(
-      promotionsData.map((data) => this.create(productId, data)),
-    );
+  // ==================== 생성 (Create) ====================
 
-    return created;
+  // 프로모션 일괄 생성
+  async createMany(promotions: Promotion[]): Promise<Promotion[]> {
+    await this.em.persistAndFlush(promotions);
+    return promotions;
   }
 
+  // ==================== 수정 (Update) ====================
+
+  // 프로모션 수정
   async update(promotion: Promotion): Promise<Promotion> {
-    const dirtyFields = promotion.getDirtyFields();
-
-    // 변경된 필드가 없으면 스킵
-    if (dirtyFields.size === 0) {
-      return promotion;
-    }
-
-    // 변경된 필드만 추출
-    const fullData = this.fromDomain(promotion);
-    const updateData: Partial<ReturnType<typeof this.fromDomain>> = {};
-
-    assignDirtyFields(fullData, updateData, [
-      ...dirtyFields,
-    ] as (keyof ReturnType<typeof this.fromDomain>)[]);
-
-    const updatedPromotion = await this.prisma.productPromotion.update({
-      where: { id: promotion.id },
-      data: updateData,
-    });
-
-    const result = this.toDomain(updatedPromotion);
-    result.clearDirtyFields();
-
-    return result;
+    await this.em.flush();
+    return promotion;
   }
 
+  // ==================== 삭제 (Delete) ====================
+
+  // 프로모션 삭제
   async delete(id: string): Promise<void> {
-    await this.prisma.productPromotion.delete({
-      where: { id },
-    });
+    const promotion = await this.findOne(id);
+    if (promotion) {
+      await this.em.removeAndFlush(promotion);
+    }
   }
 
-  async deleteByProductId(productId: string): Promise<void> {
-    await this.prisma.productPromotion.deleteMany({
-      where: { productId },
-    });
+  // ==================== 삭제 (Batch) ====================
+
+  // 상품의 모든 프로모션 삭제
+  async deleteAll(productId: string): Promise<void> {
+    const promotions = await this.find(productId);
+    if (promotions.length > 0) {
+      await this.em.removeAndFlush(promotions);
+    }
   }
 }

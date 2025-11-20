@@ -1,185 +1,143 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '@/prisma/prisma.service';
-import { Product as PrismaProduct } from '@prisma/client';
 import { Product } from '../domain/entity/product.entity';
 import {
   IProductRepository,
-  ProductFilterOptions,
-  ProductIncludeOptions,
+  ProductWithDetails,
 } from '../domain/interface/product.repository.interface';
-import { assignDirtyFields } from '@/common/utils/repository.utils';
+import { Role } from '@/user/domain/entity/user.entity';
 import { getRolePermissions } from '../domain/utils/role-permissions.utils';
+import { EntityManager } from '@mikro-orm/mysql';
+import { GetProductsFilters } from '../domain/types';
 
 @Injectable()
 export class ProductRepository implements IProductRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly em: EntityManager) {}
 
-  // read: DB → Entity
-  private toDomain(row: PrismaProduct): Product {
-    return new Product({
-      id: row.id,
-      categoryId: row.categoryId,
-      name: row.name,
-      retailPrice: row.retailPrice,
-      wholesalePrice: row.wholesalePrice,
-      description: row.description,
-      imageUrl: row.imageUrl,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-      deletedAt: row.deletedAt ?? null,
-    });
-  }
+  // ==================== 조회 (Query) ====================
 
-  // write: Entity → DB
-  private fromDomain(product: Product) {
-    return {
-      id: product.id,
-      categoryId: product.categoryId,
-      name: product.name,
-      retailPrice: product.retailPrice,
-      wholesalePrice: product.wholesalePrice,
-      description: product.description,
-      imageUrl: product.imageUrl,
-      createdAt: product.createdAt,
-      updatedAt: product.updatedAt,
-      deletedAt: product.deletedAt ?? null,
-    };
-  }
-
-  // Include 옵션을 Prisma include로 변환
-  private buildIncludeOptions(options?: ProductIncludeOptions) {
-    if (!options) return undefined;
-
-    const { userRole, includeCategory, includeStock } = options;
-    const { isB2C, isB2B } = getRolePermissions(userRole);
-
-    return {
-      category: includeCategory ?? false,
-      stock: includeStock ?? false,
-      promotions: isB2B ? true : false,
-      coupons: isB2C
-        ? {
-            include: {
-              coupon: true,
-            },
-          }
-        : false,
-    };
-  }
-
-  async existsById(id: string): Promise<boolean> {
-    const count = await this.prisma.product.count({
-      where: { id, deletedAt: null },
+  // 상품 존재 여부 확인
+  async exists(id: string): Promise<boolean> {
+    const count = await this.em.count(Product, {
+      id,
+      deletedAt: null,
     });
 
     return count > 0;
   }
 
-  async findById(
-    id: string,
-    options?: ProductIncludeOptions,
-  ): Promise<Product | null> {
-    const productData = await this.prisma.product.findUnique({
-      where: { id, deletedAt: null },
-      include: this.buildIncludeOptions(options),
+  // ID로 상품 엔티티 조회 (수정용)
+  async findById(id: string): Promise<Product | null> {
+    return await this.em.findOne(Product, {
+      id,
+      deletedAt: null,
     });
-
-    return productData ? this.toDomain(productData) : null;
   }
 
-  async findAll(
-    filterOptions?: ProductFilterOptions,
-    includeOptions?: ProductIncludeOptions,
-  ): Promise<Product[]> {
-    const { categoryId, onlyInStock, includeDeleted } = filterOptions || {};
-    const where: {
-      categoryId?: number;
-      stock?: { quantity: { gt: number } };
-      deletedAt?: Date | null;
-    } = {};
+  // 상품 목록 조회 (JOIN)
+  async findProductsWithDetails(
+    filters?: GetProductsFilters,
+    role?: Role,
+  ): Promise<ProductWithDetails[]> {
+    const { isB2B } = getRolePermissions(role); // 역할에 따른 B2B 여부 확인
+    const { categoryId } = filters || {}; // 필터에서 카테고리 ID 추출
 
-    // 필터 조건 적용
+    const priceField = isB2B ? 'p.wholesalePrice' : 'p.retailPrice'; // 가격 필드 결정
+    const selectFields = this.buildProductSelectFields(priceField); // select 필드 생성
+
+    const qb = this.em
+      .createQueryBuilder(Product, 'p')
+      .leftJoin('p.category', 'c')
+      .leftJoin('p.stock', 's')
+      .select(selectFields)
+      .where({ 'p.deletedAt': null });
+
+    // 역할에 따른 가격 필터링
+    if (isB2B) {
+      qb.andWhere({ 'p.wholesalePrice': { $ne: null } });
+    } else {
+      qb.andWhere({ 'p.retailPrice': { $ne: null } });
+    }
+
+    // 카테고리 필터링
     if (categoryId) {
-      where.categoryId = categoryId;
+      qb.andWhere({ 'p.categoryId': categoryId });
     }
 
-    if (onlyInStock) {
-      where.stock = {
-        quantity: {
-          gt: 0,
-        },
-      };
-    }
+    // 최신 수정일 기준 정렬
+    qb.orderBy({ 'p.updatedAt': 'DESC' });
 
-    if (!includeDeleted) {
-      where.deletedAt = null;
-    }
+    const products = await qb.execute<ProductWithDetails[]>('all');
 
-    const products = await this.prisma.product.findMany({
-      where,
-      include: this.buildIncludeOptions(includeOptions),
-    });
-
-    return products.map((p) => this.toDomain(p));
+    return products;
   }
 
-  async findByCategoryId(
-    categoryId: number,
-    includeOptions?: ProductIncludeOptions,
-  ): Promise<Product[]> {
-    const products = await this.prisma.product.findMany({
-      where: { categoryId, deletedAt: null },
-      include: this.buildIncludeOptions(includeOptions),
-    });
+  // 상품 상세 조회 (JOIN)
+  async findProductWithDetails(
+    id: string,
+    role?: Role,
+  ): Promise<ProductWithDetails | null> {
+    const { isB2B } = getRolePermissions(role); // 역할에 따른 B2B 여부 확인
 
-    return products.map((p) => this.toDomain(p));
+    const priceField = isB2B ? 'p.wholesalePrice' : 'p.retailPrice'; // 가격 필드 결정
+    const selectFields = this.buildProductSelectFields(priceField); // select 필드 생성
+
+    const qb = this.em
+      .createQueryBuilder(Product, 'p')
+      .leftJoin('p.category', 'c')
+      .leftJoin('p.stock', 's')
+      .select(selectFields)
+      .where({ 'p.id': id, 'p.deletedAt': null });
+
+    const product = await qb.execute<ProductWithDetails>('get'); // 단일 결과 조회
+
+    return product;
   }
 
+  // ==================== 생성 (Create) ====================
+
+  // 상품 생성
   async create(product: Product): Promise<Product> {
-    const data = this.fromDomain(product);
-
-    const newProduct = await this.prisma.product.create({
-      data,
-    });
-
-    return this.toDomain(newProduct);
+    await this.em.persistAndFlush(product);
+    return product;
   }
 
+  // ==================== 수정 (Update) ====================
+
+  // 상품 수정
   async update(product: Product): Promise<Product> {
-    const dirtyFields = product.getDirtyFields();
-
-    // 변경된 필드가 없으면 스킵
-    if (dirtyFields.size === 0) {
-      return product;
-    }
-
-    // 변경된 필드만 추출
-    const fullData = this.fromDomain(product);
-    const updateData: Partial<PrismaProduct> = {};
-
-    assignDirtyFields(fullData, updateData, [
-      ...dirtyFields,
-    ] as (keyof PrismaProduct)[]);
-
-    const updatedProduct = await this.prisma.product.update({
-      where: { id: product.id },
-      data: updateData,
-      include: {
-        category: true,
-        stock: true,
-      },
-    });
-
-    const result = this.toDomain(updatedProduct);
-    result.clearDirtyFields();
-
-    return result;
+    await this.em.flush();
+    return product;
   }
 
-  async delete(productId: string): Promise<void> {
-    await this.prisma.product.update({
-      where: { id: productId, deletedAt: null },
-      data: { deletedAt: new Date() },
+  // ==================== 삭제 (Delete) ====================
+
+  // 단일 삭제: Soft Delete (deletedAt 설정)
+  async softDelete(productId: string): Promise<void> {
+    const product = await this.em.findOne(Product, {
+      id: productId,
+      deletedAt: null,
     });
+
+    if (product) {
+      product.softDelete();
+      await this.em.flush();
+    }
+  }
+
+  // ==================== Private Methods ====================
+
+  // 상품 상세 조회용 select 필드 생성
+  private buildProductSelectFields(priceField: string): string[] {
+    return [
+      'p.id as id',
+      'p.name as name',
+      `${priceField} as price`,
+      'p.description as description',
+      'p.imageUrl as imageUrl',
+      'p.createdAt as createdAt',
+      'p.updatedAt as updatedAt',
+      'c.name as categoryName',
+      'COALESCE(s.quantity, 0) as stockQuantity',
+    ];
   }
 }

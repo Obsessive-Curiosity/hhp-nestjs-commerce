@@ -1,132 +1,50 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '@/prisma/prisma.service';
-import { Order as PrismaOrder } from '@prisma/client';
+import { EntityManager, FilterQuery } from '@mikro-orm/mysql';
 import { Order } from '../domain/entity/order.entity';
 import {
   IOrderRepository,
   OrderFilterOptions,
-  OrderIncludeOptions,
-  OrderPaginationOptions,
 } from '../domain/interface/order.repository.interface';
-import { assignDirtyFields } from '@/common/utils/repository.utils';
 
 @Injectable()
 export class OrderRepository implements IOrderRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly em: EntityManager) {}
 
-  // read: DB → Entity
-  private toDomain(row: PrismaOrder): Order {
-    return new Order({
-      id: row.id,
-      userId: row.userId,
-      status: row.status,
-      usedCouponId: row.usedCouponId,
-      basePrice: row.basePrice,
-      discountAmount: row.discountAmount,
-      paymentAmount: row.paymentAmount,
-      recipientName: row.recipientName,
-      phone: row.phone,
-      zipCode: row.zipCode,
-      address: row.address,
-      addressDetail: row.addressDetail,
-      deliveryRequest: row.deliveryRequest,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-    });
-  }
+  // ==================== 조회 (Query) ====================
 
-  // write: Entity → DB
-  private fromDomain(order: Order) {
-    return {
-      id: order.id,
-      userId: order.userId,
-      status: order.status,
-      usedCouponId: order.usedCouponId,
-      basePrice: order.basePrice,
-      discountAmount: order.discountAmount,
-      paymentAmount: order.paymentAmount,
-      recipientName: order.recipientName,
-      phone: order.phone,
-      zipCode: order.zipCode,
-      address: order.address,
-      addressDetail: order.addressDetail,
-      deliveryRequest: order.deliveryRequest,
-      createdAt: order.createdAt,
-      updatedAt: order.updatedAt,
-    };
-  }
-
-  // Include 옵션을 Prisma include로 변환
-  private buildIncludeOptions(options?: OrderIncludeOptions) {
-    if (!options) return undefined;
-
-    return {
-      orderItems: options.includeOrderItems ?? false,
-    };
-  }
-
+  // ID로 주문 존재 여부 확인
   async existsById(id: string): Promise<boolean> {
-    const count = await this.prisma.order.count({
-      where: { id },
-    });
-
+    const count = await this.em.count(Order, { id });
     return count > 0;
   }
 
-  async findById(
-    id: string,
-    options?: OrderIncludeOptions,
-  ): Promise<Order | null> {
-    const orderData = await this.prisma.order.findUnique({
-      where: { id },
-      include: this.buildIncludeOptions(options),
-    });
-
-    return orderData ? this.toDomain(orderData) : null;
+  // ID로 주문 조회
+  async findById(id: string): Promise<Order | null> {
+    return this.em.findOne(Order, { id });
   }
 
+  // 사용자별 주문 목록 조회
   async findByUserId(
     userId: string,
     filterOptions?: OrderFilterOptions,
-    paginationOptions?: OrderPaginationOptions,
-    includeOptions?: OrderIncludeOptions,
   ): Promise<Order[]> {
     const { status } = filterOptions || {};
-    const { page = 1, limit = 10 } = paginationOptions || {};
 
-    const where: {
-      userId: string;
-      status?: typeof status;
-    } = { userId };
-
+    const where: FilterQuery<Order> = { userId };
     if (status) {
       where.status = status;
     }
 
-    const orders = await this.prisma.order.findMany({
-      where,
-      include: this.buildIncludeOptions(includeOptions),
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
+    return this.em.find(Order, where, {
+      orderBy: { createdAt: 'DESC' },
     });
-
-    return orders.map((o) => this.toDomain(o));
   }
 
-  async findAll(
-    filterOptions?: OrderFilterOptions,
-    paginationOptions?: OrderPaginationOptions,
-    includeOptions?: OrderIncludeOptions,
-  ): Promise<Order[]> {
+  // 모든 주문 조회 (관리자용)
+  async findAll(filterOptions?: OrderFilterOptions): Promise<Order[]> {
     const { userId, status } = filterOptions || {};
-    const { page = 1, limit = 10 } = paginationOptions || {};
 
-    const where: {
-      userId?: string;
-      status?: typeof status;
-    } = {};
-
+    const where: FilterQuery<Order> = {};
     if (userId) {
       where.userId = userId;
     }
@@ -134,86 +52,31 @@ export class OrderRepository implements IOrderRepository {
       where.status = status;
     }
 
-    const orders = await this.prisma.order.findMany({
-      where,
-      include: this.buildIncludeOptions(includeOptions),
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
-
-    return orders.map((o) => this.toDomain(o));
-  }
-
-  async create(order: Order): Promise<Order> {
-    const data = this.fromDomain(order);
-
-    const newOrder = await this.prisma.order.create({
-      data,
-    });
-
-    return this.toDomain(newOrder);
-  }
-
-  async update(order: Order): Promise<Order> {
-    const dirtyFields = order.getDirtyFields();
-
-    // 변경된 필드가 없으면 스킵
-    if (dirtyFields.size === 0) {
-      return order;
-    }
-
-    // 변경된 필드만 추출
-    const fullData = this.fromDomain(order);
-    const updateData: Partial<PrismaOrder> = {};
-
-    assignDirtyFields(fullData, updateData, [
-      ...dirtyFields,
-    ] as (keyof PrismaOrder)[]);
-
-    const updatedOrder = await this.prisma.order.update({
-      where: { id: order.id },
-      data: updateData,
-    });
-
-    const result = this.toDomain(updatedOrder);
-    result.clearDirtyFields();
-
-    return result;
-  }
-
-  async delete(orderId: string): Promise<void> {
-    await this.prisma.order.delete({
-      where: { id: orderId },
+    return this.em.find(Order, where, {
+      orderBy: { createdAt: 'DESC' },
     });
   }
 
+  // 사용자별 주문 개수 조회
   async countByUserId(
     userId: string,
     filterOptions?: OrderFilterOptions,
   ): Promise<number> {
     const { status } = filterOptions || {};
 
-    const where: {
-      userId: string;
-      status?: typeof status;
-    } = { userId };
-
+    const where: FilterQuery<Order> = { userId };
     if (status) {
       where.status = status;
     }
 
-    return this.prisma.order.count({ where });
+    return this.em.count(Order, where);
   }
 
+  // 전체 주문 개수 조회
   async countAll(filterOptions?: OrderFilterOptions): Promise<number> {
     const { userId, status } = filterOptions || {};
 
-    const where: {
-      userId?: string;
-      status?: typeof status;
-    } = {};
-
+    const where: FilterQuery<Order> = {};
     if (userId) {
       where.userId = userId;
     }
@@ -221,6 +84,29 @@ export class OrderRepository implements IOrderRepository {
       where.status = status;
     }
 
-    return this.prisma.order.count({ where });
+    return this.em.count(Order, where);
+  }
+
+  // ==================== 생성 (Create) ====================
+
+  // 주문 생성
+  async create(order: Order): Promise<Order> {
+    await this.em.persistAndFlush(order);
+    return order;
+  }
+
+  // ==================== 수정 (Update) ====================
+
+  // 주문 수정
+  async update(order: Order): Promise<Order> {
+    await this.em.flush();
+    return order;
+  }
+
+  // ==================== 삭제 (Delete) ====================
+
+  // 주문 삭제
+  async delete(order: Order): Promise<void> {
+    await this.em.removeAndFlush(order);
   }
 }

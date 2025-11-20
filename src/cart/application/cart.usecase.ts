@@ -36,14 +36,22 @@ export class CartUseCase {
     // 상품 정보 조회 (병렬 처리)
     const productIds = cartItems.map((item) => item.productId);
     const productsData = await Promise.all(
-      productIds.map((id) => this.productService.findProductById(id, user)),
+      productIds.map((id) =>
+        this.productService.findProductWithDetails(id, user.role),
+      ),
     );
 
     // 상품 ID로 빠른 조회를 위한 Map 생성
     const productsMap = new Map<string, ProductWithStock>();
     productsData.forEach((product) => {
       if (product) {
-        productsMap.set(product.id, product as ProductWithStock);
+        productsMap.set(product.id, {
+          id: product.id,
+          name: product.name,
+          price: product.price,
+          imageUrl: product.imageUrl,
+          stockQuantity: product.stockQuantity,
+        });
       }
     });
 
@@ -59,7 +67,6 @@ export class CartUseCase {
           cartItem.productId,
           cartItem.quantity,
           product,
-          user.role,
         );
       })
       .filter((item) => item !== null);

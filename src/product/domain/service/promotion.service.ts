@@ -9,7 +9,8 @@ import {
   PROMOTION_REPOSITORY,
 } from '../interface/promotion.repository.interface';
 import { Promotion } from '../entity/promotion.entity';
-import { CreatePromotionsDto } from '@/product/presentation/dto';
+import { CreatePromotionsProps } from '../types';
+import { Transactional } from '@mikro-orm/core';
 
 @Injectable()
 export class PromotionService {
@@ -18,39 +19,79 @@ export class PromotionService {
     private readonly promotionRepository: IPromotionRepository,
   ) {}
 
-  async create(
-    productId: string,
-    dto: CreatePromotionsDto,
-  ): Promise<Promotion[]> {
-    // BR-010: 한 상품에 같은 paidQuantity의 프로모션은 하나만 존재해야 함
-    for (const promotionData of dto) {
-      const exists =
-        await this.promotionRepository.existsByProductIdAndPaidQuantity(
-          productId,
-          promotionData.paidQuantity,
-        );
+  // ==================== 조회 (Query) ====================
 
-      if (exists) {
-        throw new ConflictException(
-          `이미 동일한 수량(${promotionData.paidQuantity})의 프로모션이 존재합니다.`,
-        );
-      }
-    }
-
-    // DTO를 Repository Data로 변환 (startAt 기본값 설정)
-    const promotionsData = dto.map((item) => ({
-      paidQuantity: item.paidQuantity,
-      freeQuantity: item.freeQuantity,
-      startAt: item.startAt ?? new Date(),
-      endAt: item.endAt ?? null,
-    }));
-
-    // 프로모션 생성
-    return this.promotionRepository.createMany(productId, promotionsData);
+  // 상품의 모든 활성 프로모션 조회
+  async getActivePromotions(productId: string): Promise<Promotion[]> {
+    return this.promotionRepository.findActive(productId);
   }
 
+  // 상품의 모든 프로모션 조회
+  async getPromotionsByProductId(productId: string): Promise<Promotion[]> {
+    return this.promotionRepository.find(productId);
+  }
+
+  // ==================== 할인 계산 (Discount) ====================
+
+  // 프로모션 할인 금액 계산
+  async applyPromotionDiscount(
+    productId: string,
+    quantity: number,
+    unitPrice: number,
+  ): Promise<number> {
+    const activePromotions = await this.getActivePromotions(productId);
+
+    // 활성 프로모션이 없으면 할인 없음
+    if (activePromotions.length === 0) {
+      return 0;
+    }
+
+    // 모든 활성 프로모션의 할인 금액 계산
+    const discounts = activePromotions.map((promotion) => {
+      const freeQuantity = promotion.getFreeQuantity(quantity);
+      return freeQuantity * unitPrice;
+    });
+
+    // 가장 큰 할인 반환
+    return Math.max(...discounts);
+  }
+
+  // ==================== 생성 (Create) ====================
+
+  // 프로모션 일괄 생성
+  @Transactional()
+  async createPromotions(
+    productId: string,
+    props: CreatePromotionsProps,
+  ): Promise<Promotion[]> {
+    // BR-010: 활성 기간이 겹치는 같은 paidQuantity의 프로모션은 존재할 수 없음
+
+    // 1. Props 내부 겹침 검증 (같은 요청 내에서 겹치는 프로모션 방지)
+    this.validatePropsOverlaps(props);
+
+    // 2. DB 기존 프로모션과 겹침 검증
+    await this.validateDbOverlaps(productId, props);
+
+    // 3. Service에서 엔티티 생성 (도메인 로직 실행)
+    const promotions = props.map((item) =>
+      Promotion.create({
+        productId,
+        paidQuantity: item.paidQuantity,
+        freeQuantity: item.freeQuantity,
+        startAt: item.startAt ?? new Date(),
+        endAt: item.endAt ?? null,
+      }),
+    );
+
+    // 4. Repository는 단순히 저장만 수행
+    return this.promotionRepository.createMany(promotions);
+  }
+
+  // ==================== 삭제 (Delete) ====================
+
+  // 프로모션 삭제
   async delete(id: string): Promise<void> {
-    const promotion = await this.promotionRepository.findById(id);
+    const promotion = await this.promotionRepository.findOne(id);
 
     if (!promotion) {
       throw new NotFoundException(`ID ${id}인 프로모션을 찾을 수 없습니다.`);
@@ -59,13 +100,58 @@ export class PromotionService {
     await this.promotionRepository.delete(id);
   }
 
-  // 상품의 활성 프로모션 조회
-  async getActivePromotion(productId: string): Promise<Promotion | null> {
-    return this.promotionRepository.findActiveByProductId(productId);
+  // ==================== 검증 (private) ====================
+
+  // Props 내부 중복 검증 (같은 paidQuantity가 있으면 즉시 에러)
+  private validatePropsOverlaps(props: CreatePromotionsProps): void {
+    const paidQuantitySet = new Set<number>();
+
+    for (const promotionData of props) {
+      const { paidQuantity } = promotionData;
+
+      if (paidQuantitySet.has(paidQuantity)) {
+        throw new ConflictException({
+          message: '요청 내에 같은 paidQuantity의 프로모션이 중복됩니다.',
+          error: 'Props Promotion Overlap',
+          duplicatedPaidQuantity: paidQuantity,
+        });
+      }
+
+      paidQuantitySet.add(paidQuantity);
+    }
   }
 
-  // 상품의 모든 프로모션 조회
-  async getPromotionsByProductId(productId: string): Promise<Promotion[]> {
-    return this.promotionRepository.findByProductId(productId);
+  // DB 기존 프로모션과 겹침 검증 (모든 겹침을 한번에 수집)
+  private async validateDbOverlaps(
+    productId: string,
+    props: CreatePromotionsProps,
+  ): Promise<void> {
+    const overlappingPaidQuantities: number[] = [];
+
+    // 모든 프로모션 Props에 대해 DB 겹침 확인
+    for (const promotionData of props) {
+      const startAt = promotionData.startAt ?? new Date();
+      const endAt = promotionData.endAt ?? null;
+
+      const exists = await this.promotionRepository.existsOverlapping(
+        productId,
+        promotionData.paidQuantity,
+        startAt,
+        endAt,
+      );
+
+      if (exists) {
+        overlappingPaidQuantities.push(promotionData.paidQuantity);
+      }
+    }
+
+    // 겹치는 프로모션이 있으면 모두 모아서 에러
+    if (overlappingPaidQuantities.length > 0) {
+      throw new ConflictException({
+        message: '일부 프로모션이 기존 프로모션과 기간이 겹칩니다.',
+        error: 'Database Promotion Overlap',
+        overlappingPaidQuantity: overlappingPaidQuantities,
+      });
+    }
   }
 }
