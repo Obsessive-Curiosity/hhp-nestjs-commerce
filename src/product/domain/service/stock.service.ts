@@ -19,7 +19,7 @@ export class StockService {
 
   // ==================== 조회 (Query) ====================
 
-  // 재고 조회
+  // 재고 조회 (예외 발생)
   async getStock(productId: string): Promise<ProductStock> {
     const stock = await this.stockRepository.findByProductId(productId);
 
@@ -82,39 +82,41 @@ export class StockService {
 
   // ==================== 수정 (Update) ====================
 
-  // 재고 증가 (낙관적 락 사용)
+  // 재고 증가 (비관적 락 사용)
   async increaseStock(productId: string, quantity: number): Promise<void> {
-    const stock = await this.getStock(productId);
-
-    // Domain Entity를 통한 비즈니스 로직 검증
+    // 입력 검증
     if (quantity <= 0) {
-      throw new Error('증가할 수량은 0보다 커야 합니다.');
+      throw new BadRequestException('증가할 수량은 0보다 커야 합니다.');
     }
 
-    // Optimistic Locking을 사용한 재고 증가
-    await this.stockRepository.increaseWithVersion(
-      productId,
-      quantity,
-      stock.version,
-    );
+    // Pessimistic Locking을 사용한 재고 증가
+    await this.stockRepository.increaseWithLock(productId, quantity);
   }
 
-  // 재고 감소 (낙관적 락 사용)
+  // 재고 감소 (비관적 락 사용 - SELECT FOR UPDATE)
   async decreaseStock(productId: string, quantity: number): Promise<void> {
-    const stock = await this.getStock(productId);
-
-    // 재고 충분 여부 확인 (Domain Entity)
-    if (!stock.hasStock(quantity)) {
-      throw new Error(
-        `재고가 부족합니다. 현재 재고: ${stock.quantity}, 요청 수량: ${quantity}`,
-      );
+    // 입력 검증
+    if (quantity <= 0) {
+      throw new BadRequestException('감소할 수량은 0보다 커야 합니다.');
     }
 
-    // Optimistic Locking을 사용한 재고 감소
-    await this.stockRepository.decreaseWithVersion(
-      productId,
-      quantity,
-      stock.version,
-    );
+    // Pessimistic Locking을 사용한 재고 감소
+    // Repository에서 락 획득, 검증, 감소를 원자적으로 처리
+    await this.stockRepository.decreaseWithLock(productId, quantity);
+  }
+
+  // 재고 증가 (비관적 락 사용 - 롤백/반품용)
+  async increaseStockWithLock(
+    productId: string,
+    quantity: number,
+  ): Promise<void> {
+    // 입력 검증
+    if (quantity <= 0) {
+      throw new BadRequestException('증가할 수량은 0보다 커야 합니다.');
+    }
+
+    // Pessimistic Locking을 사용한 재고 증가
+    // 롤백 시나리오에서 사용 - 반드시 성공해야 함
+    await this.stockRepository.increaseWithLock(productId, quantity);
   }
 }

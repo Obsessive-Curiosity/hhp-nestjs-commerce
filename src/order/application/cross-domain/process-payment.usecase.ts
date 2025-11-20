@@ -1,78 +1,190 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
-import { Transactional } from '@mikro-orm/core';
-import { OrderService } from '@/order/domain/service/order.service';
-import { OrderItemService } from '@/order/domain/service/order-item.service';
-import { StockService } from '@/product/domain/service/stock.service';
-import { WalletService } from '@/wallet/domain/service/wallet.service';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { CreateOrderProps } from '@/order/domain/types';
+import { CreateOrderTransaction } from '../in-domain/create-order.transaction';
+import { CompletePaymentTransaction } from './complete-payment.transaction';
+import { DeleteOrderRollback } from '../in-domain/delete-order.rollback';
+import { ProductService } from '@/product/domain/service/product.service';
+import { AddressService } from '@/user/domain/service/address.service';
+import { CouponService } from '@/coupon/domain/service/coupon.service';
+import { CreateOrderDto } from '@/order/presentation/dto';
+import { Payload } from '@/types/express';
+import { ProductWithDetails } from '@/product/domain/interface/product.repository.interface';
+import { getRolePermissions } from '@/product/domain/utils/role-permissions.utils';
+import { DeductStockTransaction } from '@/product/application/in-domain/deduct-stock.transaction';
+import { RestoreStockTransaction } from '@/product/application/in-domain/restore-stock.transaction';
 import { CartService } from '@/cart/domain/service/cart.service';
 
 @Injectable()
 export class ProcessPaymentUseCase {
   constructor(
-    private readonly orderService: OrderService,
-    private readonly orderItemService: OrderItemService,
-    private readonly stockService: StockService,
-    private readonly walletService: WalletService,
+    private readonly productService: ProductService,
+    private readonly addressService: AddressService,
+    private readonly couponService: CouponService,
     private readonly cartService: CartService,
+    private readonly createOrderTransaction: CreateOrderTransaction,
+    private readonly deductStockTransaction: DeductStockTransaction,
+    private readonly restoreStockTransaction: RestoreStockTransaction,
+    private readonly completePaymentTransaction: CompletePaymentTransaction,
+    private readonly deleteOrderRollback: DeleteOrderRollback,
   ) {}
 
-  /**
-   * 결제 처리
-   *
-   * FR-018: 지갑으로 결제
-   * FR-021: 결제 성공 후 재고 차감
-   * BR-027: 결제 완료 후 재고 차감
-   * BR-028: 지갑 사용 내역 기록
-   */
-  @Transactional()
-  async execute(orderId: string, userId: string) {
-    // 1. 주문 조회 및 권한 검증
-    const order = await this.orderService.validateOrderOwnership(
-      orderId,
-      userId,
-    );
+  async execute(user: Payload, dto: CreateOrderDto) {
+    const { sub: userId, role: userRole } = user;
+    const { items, couponId, deliveryRequest } = dto;
 
-    if (!order.isPending()) {
-      throw new BadRequestException(
-        'PENDING 상태의 주문만 결제할 수 있습니다.',
-      );
-    }
+    // ==================== 1. 검증 단계 (트랜잭션 없음) ====================
 
-    // 2. 주문 항목 조회
-    const orderItems =
-      await this.orderItemService.findOrderItemsByOrderId(orderId);
-
-    if (orderItems.length === 0) {
-      throw new BadRequestException('주문 항목이 없습니다.');
-    }
-
-    // 3. 지갑 차감 (낙관적 락 재시도 내장)
-    // TODO: orderId를 WalletTransactionHistory에 기록하도록 개선 필요
-    await this.walletService.use(userId, order.paymentAmount);
-
-    // 4. 재고 차감 (낙관적 락 재시도 내장)
-    // 각 주문 항목에 대해 재고 차감
-    await Promise.all(
-      orderItems.map((item) =>
-        this.stockService.decreaseStock(item.productId, item.quantity),
+    // 1-1. 상품 존재 및 활성화 검증
+    const productsData = await Promise.all(
+      items.map((item) =>
+        this.productService.findProductWithDetails(item.productId, userRole),
       ),
     );
 
-    // 5. TODO: 쿠폰 사용 처리 (CouponService)
-    // if (order.usedCouponId) {
-    //   await this.couponService.markAsUsed(order.usedCouponId);
-    // }
+    // 1-2. 삭제된 상품 체크 및 유효한 상품 필터링
+    const { validProducts: products, inactiveProductIds } =
+      this.separateDeletedProducts(items, productsData);
 
-    // 6. 주문 상태 업데이트 (PAID)
-    await this.orderService.markOrderAsPaid(orderId);
+    if (inactiveProductIds.length > 0) {
+      throw new NotFoundException({
+        code: 'PRODUCTS_NOT_FOUND',
+        inactiveProductIds,
+      });
+    }
 
-    // 7. 장바구니 비우기
+    // 1-3. 기본 배송지 조회
+    const defaultAddress = await this.addressService.getDefaultAddress(userId);
+
+    if (!defaultAddress) {
+      throw new NotFoundException('기본 배송지가 설정되어 있지 않습니다.');
+    }
+
+    const address = defaultAddress;
+
+    // 1-4. 주문 항목별 금액 계산
+    const calculatedItems = items.map((item, index) => {
+      const product = products[index];
+
+      const unitPrice = product.price; // 상품 단가
+      const quantity = item.quantity; // 주문 수량
+      const baseAmount = unitPrice * quantity;
+
+      // 항목별 할인 없음
+      const discountAmount = 0;
+      const paymentAmount = baseAmount;
+
+      return {
+        productId: item.productId,
+        quantity,
+        unitPrice,
+        discountAmount,
+        paymentAmount,
+      };
+    });
+
+    // 1-4. 주문 전체 금액 계산
+    const basePrice = calculatedItems.reduce(
+      (sum, item) => sum + item.unitPrice * item.quantity,
+      0,
+    );
+
+    // 1-5. 쿠폰 할인 계산 (B2C만)
+    const { isB2C } = getRolePermissions(userRole);
+
+    let couponDiscount = 0;
+    if (isB2C && couponId) {
+      couponDiscount = await this.couponService.applyCouponDiscount(
+        couponId,
+        basePrice,
+      );
+    }
+
+    const totalDiscount = couponDiscount;
+    const paymentAmount = basePrice - totalDiscount;
+
+    // ==================== 2. Order 생성 (트랜잭션) ====================
+
+    const orderData: CreateOrderProps = {
+      userId,
+      usedCouponId: couponId,
+      basePrice,
+      discountAmount: totalDiscount,
+      paymentAmount,
+      recipientName: address.recipientName,
+      phone: address.phone,
+      zipCode: address.zipCode,
+      address: address.getOrderAddress(),
+      addressDetail: address.detail,
+      deliveryRequest: deliveryRequest ?? null,
+    };
+
+    const { order, orderItems: createdOrderItems } =
+      await this.createOrderTransaction.execute({
+        orderData,
+        orderItems: calculatedItems,
+      });
+
+    // ==================== 3. 재고 차감 (트랜잭션 + 보상 트랜잭션) ====================
+    const deductItems = createdOrderItems.map((item) => ({
+      productId: item.productId,
+      quantity: item.quantity,
+    }));
+
+    try {
+      await this.deductStockTransaction.execute({ items: deductItems });
+    } catch (error) {
+      // 보상 트랜잭션: 재고 차감 실패 시 생성된 주문 삭제
+      await this.deleteOrderRollback.execute(order);
+      throw error;
+    }
+
+    // ==================== 4. 결제 처리 (지갑 + 쿠폰 + 상태 변경 = 하나의 트랜잭션) ====================
+    try {
+      await this.completePaymentTransaction.execute({
+        userId,
+        amount: paymentAmount,
+        orderId: order.id,
+        userCouponId: couponId,
+      });
+    } catch (error) {
+      // 보상 트랜잭션: 재고 복구 + 주문 삭제
+      await this.restoreStockTransaction.execute({ items: deductItems });
+      await this.deleteOrderRollback.execute(order);
+      throw error;
+    }
+
+    // ==================== 5. 장바구니 비우기 (Redis) ====================
     await this.cartService.clearCart(userId);
 
     return {
-      message: '결제가 완료되었습니다.',
-      orderId: order.id,
-      paymentAmount: order.paymentAmount,
+      message: '주문이 완료되었습니다.',
+      order,
+      orderItems: createdOrderItems,
     };
+  }
+
+  // ==================== Private Methods ====================
+
+  /**
+   * 상품 데이터를 유효한 상품과 삭제된 상품 ID로 분리
+   */
+  private separateDeletedProducts(
+    items: Array<{ productId: string }>,
+    productsData: (ProductWithDetails | null)[],
+  ): { validProducts: ProductWithDetails[]; inactiveProductIds: string[] } {
+    return productsData.reduce(
+      (acc, product, index) => {
+        if (product === null) {
+          acc.inactiveProductIds.push(items[index].productId);
+        } else {
+          acc.validProducts.push(product);
+        }
+        return acc;
+      },
+      {
+        validProducts: [] as ProductWithDetails[],
+        inactiveProductIds: [] as string[],
+      },
+    );
   }
 }

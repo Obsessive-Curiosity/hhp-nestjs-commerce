@@ -13,19 +13,11 @@ export interface IStockRepository {
     initialQuantity: number,
   ): Promise<ProductStock>;
 
-  // 재고 증가 (Optimistic Locking)
-  increaseWithVersion(
-    productId: string,
-    quantity: number,
-    currentVersion: number,
-  ): Promise<void>;
+  // 재고 증가 (Pessimistic Locking - 롤백/반품용)
+  increaseWithLock(productId: string, quantity: number): Promise<void>;
 
-  // 재고 감소 (Optimistic Locking)
-  decreaseWithVersion(
-    productId: string,
-    quantity: number,
-    currentVersion: number,
-  ): Promise<void>;
+  // 재고 감소 (Pessimistic Locking - 주문 차감용)
+  decreaseWithLock(productId: string, quantity: number): Promise<void>;
 
   // 재고 수량 조회
   getQuantity(productId: string): Promise<number>;

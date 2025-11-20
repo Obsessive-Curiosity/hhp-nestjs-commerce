@@ -1,7 +1,10 @@
-import { Injectable } from '@nestjs/common';
-import { EntityManager } from '@mikro-orm/mysql';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { EntityManager, LockMode } from '@mikro-orm/mysql';
 import { ProductStock } from '../domain/entity/product-stock.entity';
-import { Product } from '../domain/entity/product.entity';
 import { IStockRepository } from '../domain/interface/stock.repository.interface';
 
 @Injectable()
@@ -12,18 +15,18 @@ export class StockRepository implements IStockRepository {
 
   // 상품별 재고 조회
   async findByProductId(productId: string): Promise<ProductStock | null> {
-    return await this.em.findOne(ProductStock, { product: productId });
+    return await this.em.findOne(ProductStock, { productId });
   }
 
   // 재고 수량 조회
   async getQuantity(productId: string): Promise<number> {
-    const stock = await this.em.findOne(ProductStock, { product: productId });
+    const stock = await this.em.findOne(ProductStock, { productId });
     return stock?.quantity ?? 0;
   }
 
   // 재고 존재 여부 확인
   async exists(productId: string): Promise<boolean> {
-    const count = await this.em.count(ProductStock, { product: productId });
+    const count = await this.em.count(ProductStock, { productId });
     return count > 0;
   }
 
@@ -40,11 +43,10 @@ export class StockRepository implements IStockRepository {
     productId: string,
     initialQuantity: number,
   ): Promise<ProductStock> {
-    const stock = new ProductStock();
+    const stock = ProductStock.create(initialQuantity);
 
-    // em.getReference() 사용: DB 조회 없이 Product 참조만 생성
-    stock.product = this.em.getReference(Product, productId);
-    stock.quantity = initialQuantity;
+    // productId 설정
+    stock.productId = productId;
 
     await this.em.persistAndFlush(stock);
     return stock;
@@ -52,53 +54,59 @@ export class StockRepository implements IStockRepository {
 
   // ==================== 수정 (Update) ====================
 
-  // 낙관적 락을 사용한 재고 증가
-  async increaseWithVersion(
-    productId: string,
-    quantity: number,
-    currentVersion: number,
-  ): Promise<void> {
-    const stock = await this.em.findOne(ProductStock, {
-      product: productId,
-      version: currentVersion,
-    });
+  // 비관적 락을 사용한 재고 증가 (롤백/반품용)
+  async increaseWithLock(productId: string, quantity: number): Promise<void> {
+    // SELECT ... FOR UPDATE - row lock 획득
+    const stock = await this.em.findOne(
+      ProductStock,
+      { productId },
+      { lockMode: LockMode.PESSIMISTIC_WRITE },
+    );
 
     if (!stock) {
-      throw new Error(
-        '재고 증가 실패: 다른 트랜잭션에 의해 변경되었습니다. 다시 시도해주세요.',
+      throw new NotFoundException(
+        `상품 ID ${productId}의 재고를 찾을 수 없습니다.`,
       );
     }
 
+    // 입력 검증
+    if (quantity <= 0) {
+      throw new BadRequestException('증가할 수량은 0보다 커야 합니다.');
+    }
+
+    // 재고 증가 (row lock 획득 상태, 안전하게 수정 가능)
     stock.quantity += quantity;
 
+    // 변경사항 flush (트랜잭션 커밋 시 lock 해제)
     await this.em.flush();
   }
 
-  // 낙관적 락을 사용한 재고 감소
-  async decreaseWithVersion(
-    productId: string,
-    quantity: number,
-    currentVersion: number,
-  ): Promise<void> {
-    const stock = await this.em.findOne(ProductStock, {
-      product: productId,
-      version: currentVersion,
-    });
+  // 비관적 락을 사용한 재고 감소 (SELECT FOR UPDATE)
+  async decreaseWithLock(productId: string, quantity: number): Promise<void> {
+    // SELECT ... FOR UPDATE - row lock 획득
+    const stock = await this.em.findOne(
+      ProductStock,
+      { productId },
+      { lockMode: LockMode.PESSIMISTIC_WRITE },
+    );
 
     if (!stock) {
-      throw new Error(
-        '재고 감소 실패: 재고가 부족하거나 다른 트랜잭션에 의해 변경되었습니다.',
+      throw new NotFoundException(
+        `상품 ID ${productId}의 재고를 찾을 수 없습니다.`,
       );
     }
 
+    // 재고 충분 여부 검증
     if (stock.quantity < quantity) {
-      throw new Error(
-        '재고 감소 실패: 재고가 부족하거나 다른 트랜잭션에 의해 변경되었습니다.',
+      throw new BadRequestException(
+        `재고가 부족합니다. 현재 재고: ${stock.quantity}, 요청 수량: ${quantity}`,
       );
     }
 
+    // 재고 감소 (row lock 획득 상태, 안전하게 수정 가능)
     stock.quantity -= quantity;
 
+    // 변경사항 flush (트랜잭션 커밋 시 lock 해제)
     await this.em.flush();
   }
 }
