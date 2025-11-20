@@ -129,6 +129,9 @@ importers:
       '@swc/core':
         specifier: ^1.10.7
         version: 1.13.21
+      '@testcontainers/mysql':
+        specifier: ^11.8.1
+        version: 11.8.1
       '@types/bcrypt':
         specifier: ^6.0.0
         version: 6.0.0
@@ -1241,6 +1244,9 @@ packages:
   '@szmarczak/http-timer@5.0.1':
     resolution: {integrity: sha512-+PmQX0PiAYPMeVYe237LJAYvOMYW1j2rH5YROyS3b4CTVJum34HfRvKvAzozHAQG0TnHNdUfY9nCeUyRAs//cw==}
     engines: {node: '>=14.16'}
+
+  '@testcontainers/mysql@11.8.1':
+    resolution: {integrity: sha512-FhlaFo2RKhDe0i1EnVwoASZnHm2h1gvliUGv5TTU0cUlAX8fpiFe/o286tm22EGTBwFGJKuyrVK4NLElrZWilA==}
 
   '@tokenizer/inflate@0.2.7':
     resolution: {integrity: sha512-MADQgmZT1eKjp06jpI2yozxaU9uVs4GzzgSL+uEq7bVcJ9V1ZXQkeGNql1fsSI0gMy1vhvNTNbUqrx+pZfJVmg==}
@@ -5623,6 +5629,15 @@ snapshots:
   '@szmarczak/http-timer@5.0.1':
     dependencies:
       defer-to-connect: 2.0.1
+
+  '@testcontainers/mysql@11.8.1':
+    dependencies:
+      testcontainers: 11.8.1
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - react-native-b4a
+      - supports-color
 
   '@tokenizer/inflate@0.2.7':
     dependencies:
