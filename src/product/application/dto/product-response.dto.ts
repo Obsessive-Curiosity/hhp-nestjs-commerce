@@ -1,6 +1,6 @@
 import { Product } from '@/product/domain/entity/product.entity';
-import { Role } from '@/user/domain/entity/user.entity';
 import { StockResponseDto } from './stock-response.dto';
+import { ProductWithDetails } from '@/product/domain/interface/product-read.repository.interface';
 
 // 상품 목록 아이템 (간단한 정보)
 export class ProductListItemResponseDto {
@@ -12,15 +12,17 @@ export class ProductListItemResponseDto {
   imageUrl: string | null;
   hasStock: boolean;
 
-  static from(product: Product, role?: Role): ProductListItemResponseDto {
+  static fromProductWithDetails(
+    data: ProductWithDetails,
+  ): ProductListItemResponseDto {
     const dto = new ProductListItemResponseDto();
-    dto.id = product.id;
-    dto.category = product.category.name;
-    dto.name = product.name;
-    dto.price = product.getPrice(role);
-    dto.description = product.description ?? null;
-    dto.imageUrl = product.imageUrl ?? null;
-    dto.hasStock = product.stock ? product.stock.quantity > 0 : false;
+    dto.id = data.id;
+    dto.category = data.categoryName;
+    dto.name = data.name;
+    dto.price = data.price;
+    dto.description = null;
+    dto.imageUrl = data.imageUrl;
+    dto.hasStock = data.stockQuantity > 0;
     return dto;
   }
 }
@@ -37,17 +39,19 @@ export class ProductDetailResponseDto {
   createdAt: Date;
   updatedAt: Date;
 
-  static from(product: Product, role?: Role): ProductDetailResponseDto {
+  static fromProductWithDetails(
+    data: ProductWithDetails,
+  ): ProductDetailResponseDto {
     const dto = new ProductDetailResponseDto();
-    dto.id = product.id;
-    dto.category = product.category.name;
-    dto.name = product.name;
-    dto.price = product.getPrice(role);
-    dto.description = product.description ?? null;
-    dto.imageUrl = product.imageUrl ?? null;
-    dto.stock = product.stock ? StockResponseDto.from(product.stock) : null;
-    dto.createdAt = product.createdAt;
-    dto.updatedAt = product.updatedAt;
+    dto.id = data.id;
+    dto.category = data.categoryName;
+    dto.name = data.name;
+    dto.price = data.price;
+    dto.description = data.description ?? null;
+    dto.imageUrl = data.imageUrl;
+    dto.stock = null;
+    dto.createdAt = data.createdAt;
+    dto.updatedAt = data.updatedAt;
     return dto;
   }
 }

@@ -6,7 +6,6 @@ export class StockResponseDto {
   quantity: number;
   createdAt: Date;
   updatedAt: Date;
-  version: number;
 
   static from(stock: ProductStock): StockResponseDto {
     const dto = new StockResponseDto();
@@ -14,7 +13,6 @@ export class StockResponseDto {
     dto.quantity = stock.quantity;
     dto.createdAt = stock.createdAt;
     dto.updatedAt = stock.updatedAt;
-    dto.version = stock.version;
     return dto;
   }
 }

@@ -1,5 +1,3 @@
-import { Role } from '@/user/domain/entity/user.entity';
-
 export class CartItemResponseDto {
   productId: string;
   productName: string;
@@ -19,12 +17,9 @@ export class CartResponseDto {
 export interface ProductWithStock {
   id: string;
   name: string;
-  retailPrice: number;
-  wholesalePrice: number;
+  price: number;
   imageUrl?: string | null;
-  stock: {
-    quantity: number;
-  } | null;
+  stockQuantity: number;
 }
 
 export class CartItemBuilder {
@@ -32,23 +27,16 @@ export class CartItemBuilder {
     productId: string,
     quantity: number,
     product: ProductWithStock,
-    userRole: Role,
   ): CartItemResponseDto {
-    const price =
-      userRole === Role.WHOLESALER
-        ? product.wholesalePrice
-        : product.retailPrice;
-
-    const availableStock = product.stock?.quantity ?? 0;
-    const isStockSufficient = availableStock >= quantity;
+    const isStockSufficient = product.stockQuantity >= quantity;
 
     return {
       productId,
       productName: product.name,
       quantity,
-      price,
+      price: product.price,
       imageUrl: product.imageUrl ?? undefined,
-      availableStock,
+      availableStock: product.stockQuantity,
       isStockSufficient,
     };
   }

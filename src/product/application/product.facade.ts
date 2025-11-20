@@ -1,7 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
 import { ProductService } from '../domain/service/product.service';
 import { PromotionService } from '../domain/service/promotion.service';
 import { StockService } from '../domain/service/stock.service';
+import {
+  IProductRepository,
+  PRODUCT_REPOSITORY,
+} from '../domain/interface/product.repository.interface';
 import {
   UpdateProductProps,
   CreatePromotionsProps,
@@ -24,6 +28,8 @@ export class ProductFacade {
     private readonly productService: ProductService,
     private readonly stockService: StockService,
     private readonly promotionService: PromotionService,
+    @Inject(PRODUCT_REPOSITORY)
+    private readonly productRepository: IProductRepository,
   ) {}
 
   // ==================== 조회 ====================
@@ -34,10 +40,11 @@ export class ProductFacade {
     user?: Payload,
   ): Promise<ProductListItemResponseDto[]> {
     const { role } = user || {};
-    const products = await this.productService.findProducts(filters, role);
+    const productsWithDetails =
+      await this.productRepository.findProductsWithDetails(filters, role);
 
-    return products.map((product) =>
-      ProductListItemResponseDto.from(product, role),
+    return productsWithDetails.map((data) =>
+      ProductListItemResponseDto.fromProductWithDetails(data),
     );
   }
 
@@ -47,13 +54,14 @@ export class ProductFacade {
     user?: Payload,
   ): Promise<ProductDetailResponseDto | null> {
     const { role } = user || {};
-    const product = await this.productService.findProduct(id, role);
+    const productWithDetails =
+      await this.productRepository.findProductWithDetails(id, role);
 
-    if (!product) {
+    if (!productWithDetails) {
       return null;
     }
 
-    return ProductDetailResponseDto.from(product, role);
+    return ProductDetailResponseDto.fromProductWithDetails(productWithDetails);
   }
 
   // 활성 프로모션 조회
