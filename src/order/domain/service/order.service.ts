@@ -10,7 +10,6 @@ import {
   ORDER_REPOSITORY,
   OrderFilterOptions,
   OrderPaginationOptions,
-  OrderIncludeOptions,
 } from '../interface/order.repository.interface';
 import { CreateOrderProps } from '../types';
 
@@ -24,11 +23,8 @@ export class OrderService {
   // ==================== 조회 (Query) ====================
 
   // 주문 조회 by ID
-  async findOrderById(
-    orderId: string,
-    options?: OrderIncludeOptions,
-  ): Promise<Order> {
-    const order = await this.orderRepository.findById(orderId, options);
+  async findOrderById(orderId: string): Promise<Order> {
+    const order = await this.orderRepository.findById(orderId);
 
     if (!order) {
       throw new NotFoundException(`ID ${orderId}인 주문을 찾을 수 없습니다.`);
@@ -42,13 +38,11 @@ export class OrderService {
     userId: string,
     filterOptions?: OrderFilterOptions,
     paginationOptions?: OrderPaginationOptions,
-    includeOptions?: OrderIncludeOptions,
   ): Promise<Order[]> {
     return this.orderRepository.findByUserId(
       userId,
       filterOptions,
       paginationOptions,
-      includeOptions,
     );
   }
 
@@ -56,13 +50,8 @@ export class OrderService {
   async findAllOrders(
     filterOptions?: OrderFilterOptions,
     paginationOptions?: OrderPaginationOptions,
-    includeOptions?: OrderIncludeOptions,
   ): Promise<Order[]> {
-    return this.orderRepository.findAll(
-      filterOptions,
-      paginationOptions,
-      includeOptions,
-    );
+    return this.orderRepository.findAll(filterOptions, paginationOptions);
   }
 
   // 주문 존재 여부 확인
@@ -158,6 +147,13 @@ export class OrderService {
     order.deliver();
 
     return this.orderRepository.update(order);
+  }
+
+  // ==================== 삭제 (Delete) ====================
+
+  // 주문 삭제 (도메인 레벨 단일 책임)
+  async deleteOrder(order: Order): Promise<void> {
+    await this.orderRepository.delete(order);
   }
 
   // ==================== 정책 (Policy) ====================

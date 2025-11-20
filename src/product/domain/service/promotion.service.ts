@@ -31,6 +31,31 @@ export class PromotionService {
     return this.promotionRepository.find(productId);
   }
 
+  // ==================== 할인 계산 (Discount) ====================
+
+  // 프로모션 할인 금액 계산
+  async applyPromotionDiscount(
+    productId: string,
+    quantity: number,
+    unitPrice: number,
+  ): Promise<number> {
+    const activePromotions = await this.getActivePromotions(productId);
+
+    // 활성 프로모션이 없으면 할인 없음
+    if (activePromotions.length === 0) {
+      return 0;
+    }
+
+    // 모든 활성 프로모션의 할인 금액 계산
+    const discounts = activePromotions.map((promotion) => {
+      const freeQuantity = promotion.getFreeQuantity(quantity);
+      return freeQuantity * unitPrice;
+    });
+
+    // 가장 큰 할인 반환
+    return Math.max(...discounts);
+  }
+
   // ==================== 생성 (Create) ====================
 
   // 프로모션 일괄 생성

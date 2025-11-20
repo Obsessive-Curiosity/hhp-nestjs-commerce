@@ -1,4 +1,9 @@
-import { Inject, Injectable } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { Coupon } from '../entity/coupon.entity';
 import {
   ICouponRepository,
@@ -37,6 +42,29 @@ export class CouponService {
       return false;
     }
     return coupon.canIssue();
+  }
+
+  // 쿠폰 할인 금액 계산
+  async applyCouponDiscount(
+    couponId: string,
+    baseAmount: number,
+  ): Promise<number> {
+    // 1. 쿠폰 조회
+    const coupon = await this.couponRepository.findById(couponId);
+    if (!coupon) {
+      throw new NotFoundException('쿠폰을 찾을 수 없습니다.');
+    }
+
+    // 2. 최소 구매 금액 확인
+    if (!coupon.checkMinPurchaseAmount(baseAmount)) {
+      const minAmount = coupon.minPurchaseAmount || 0;
+      throw new BadRequestException(
+        `최소 구매 금액을 충족하지 못했습니다. (필요: ${minAmount}원)`,
+      );
+    }
+
+    // 3. 할인 계산 (엔티티에 위임)
+    return coupon.calculateDiscount(baseAmount);
   }
 
   // ==================== 생성 (Create) ====================
