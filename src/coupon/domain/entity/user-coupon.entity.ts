@@ -1,4 +1,4 @@
-import { Entity, PrimaryKey, Property, Enum, t } from '@mikro-orm/core';
+import { Entity, PrimaryKey, Property, Enum, t, Index } from '@mikro-orm/core';
 import { BadRequestException } from '@nestjs/common';
 import { v7 as uuidv7 } from 'uuid';
 
@@ -15,18 +15,10 @@ export type CreateUserCouponProps = {
 };
 
 @Entity({ tableName: 'user_coupon' })
+@Index({ name: 'fk_user_coupon_userId', properties: ['userId'] })
+@Index({ name: 'fk_user_coupon_couponId', properties: ['couponId'] })
 export class UserCoupon {
-  /**
-   * 대리키 ID
-   *
-   * userId + couponId 복합키가 아닌 별도 ID를 사용하는 이유:
-   * 1. Order 엔티티에서 특정 UserCoupon 인스턴스를 참조하기 위함
-   * 2. 쿠폰 발급/사용/만료의 완전한 이력 추적
-   * 3. 주문 취소 시 정확한 쿠폰 복구 지원
-   * 4. API/URL에서 단일 값으로 식별 가능
-   *
-   * Note: userId + couponId의 유니크 제약은 별도 인덱스로 관리
-   */
+  // Order 참조 및 쿠폰 복구를 위한 대리키 사용
   @PrimaryKey({ type: t.character, length: 36 })
   id: string = uuidv7();
 

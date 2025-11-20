@@ -20,7 +20,12 @@ export class CategoryService {
 
   // ==================== 조회 (Query) ====================
 
-  // ID로 카테고리 조회
+  // ID로 카테고리 조회 (nullable)
+  async findById(id: number): Promise<Category | null> {
+    return await this.categoryRepository.findById(id);
+  }
+
+  // ID로 카테고리 조회 (예외 발생)
   async getCategoryById(id: number): Promise<Category> {
     const category = await this.categoryRepository.findById(id);
 

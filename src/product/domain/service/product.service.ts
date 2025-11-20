@@ -3,6 +3,7 @@ import { Product } from '../entity/product.entity';
 import {
   IProductRepository,
   PRODUCT_REPOSITORY,
+  ProductWithDetails,
 } from '../interface/product.repository.interface';
 import {
   CreateProductProps,
@@ -20,22 +21,36 @@ export class ProductService {
 
   // ==================== 조회 (Query) ====================
 
-  // 상품 목록 조회
-  async findProducts(
+  async findProductsWithDetails(
     filters?: GetProductsFilters,
     role?: Role,
-  ): Promise<Product[]> {
-    return await this.productRepository.find(role, filters);
+  ): Promise<ProductWithDetails[]> {
+    const products = await this.productRepository.findProductsWithDetails(
+      filters,
+      role,
+    );
+
+    return products.map((product) => ({
+      ...product,
+      hasStock: product.stockQuantity > 0,
+    }));
   }
 
-  // 상품 조회 by ID
-  async findProduct(id: string, role?: Role): Promise<Product | null> {
-    const product = await this.productRepository.findOne(id, role);
-    if (!product) {
-      throw new NotFoundException(`ID ${id}인 상품을 찾을 수 없습니다.`);
-    }
+  async findProductWithDetails(
+    id: string,
+    role?: Role,
+  ): Promise<ProductWithDetails | null> {
+    const product = await this.productRepository.findProductWithDetails(
+      id,
+      role,
+    );
 
-    return product;
+    if (!product) return null;
+
+    return {
+      ...product,
+      hasStock: product.stockQuantity > 0,
+    };
   }
 
   // 상품 존재 여부 확인
@@ -64,8 +79,8 @@ export class ProductService {
 
   // 상품 정보 수정
   async updateProduct(id: string, props: UpdateProductProps): Promise<Product> {
-    // 기존 상품 조회 (관리자 작업이므로 role 없이 전체 데이터 조회)
-    const product = await this.productRepository.findOne(id, Role.ADMIN);
+    // 기존 상품 조회
+    const product = await this.productRepository.findById(id);
 
     if (!product) {
       throw new NotFoundException(`ID ${id}인 상품을 찾을 수 없습니다.`);

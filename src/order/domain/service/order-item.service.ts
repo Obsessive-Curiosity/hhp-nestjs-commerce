@@ -1,5 +1,4 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { randomUUID } from 'crypto';
 import { OrderItem, OrderItemClaimStatus } from '../entity/order-item.entity';
 import {
   IOrderItemRepository,
@@ -49,7 +48,6 @@ export class OrderItemService {
   async createOrderItem(params: {
     orderId: string;
     productId: string;
-    usedItemCouponId: string | null;
     quantity: number;
     unitPrice: number;
     discountAmount: number;
@@ -67,7 +65,6 @@ export class OrderItemService {
     items: Array<{
       orderId: string;
       productId: string;
-      usedItemCouponId: string | null;
       quantity: number;
       unitPrice: number;
       discountAmount: number;
@@ -127,5 +124,16 @@ export class OrderItemService {
     orderItem.completeExchange();
 
     return this.orderItemRepository.update(orderItem);
+  }
+
+  // ==================== 삭제 (Delete) ====================
+
+  // 주문별 주문 항목 삭제 (트랜잭션 롤백용)
+  async deleteByOrderId(orderId: string): Promise<void> {
+    const orderItems = await this.findOrderItemsByOrderId(orderId);
+
+    for (const item of orderItems) {
+      await this.orderItemRepository.delete(item.id);
+    }
   }
 }

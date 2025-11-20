@@ -18,7 +18,4 @@ export type UpdateProductProps = {
 
 export type GetProductsFilters = {
   categoryId?: number;
-  minPrice?: number;
-  maxPrice?: number;
-  search?: string;
 };

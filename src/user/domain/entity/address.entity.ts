@@ -1,7 +1,8 @@
-import { Entity, PrimaryKey, Property, t } from '@mikro-orm/core';
+import { Entity, PrimaryKey, Property, t, Index } from '@mikro-orm/core';
 import { CreateAddressProps, UpdateAddressProps } from '../types';
 
 @Entity()
+@Index({ name: 'fk_address_userId', properties: ['userId'] })
 export class Address {
   @PrimaryKey()
   id!: number;

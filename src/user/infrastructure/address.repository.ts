@@ -16,12 +16,12 @@ export class AddressRepository implements IAddressRepository {
 
   // 사용자별 주소 목록 조회
   async find(userId: string): Promise<Address[]> {
-    return await this.em.find(Address, { user: userId });
+    return await this.em.find(Address, { userId });
   }
 
   // 사용자의 기본 배송지 조회
   async findDefault(userId: string): Promise<Address | null> {
-    return await this.em.findOne(Address, { user: userId, isDefault: true });
+    return await this.em.findOne(Address, { userId, isDefault: true });
   }
 
   // ==================== 생성 (Create) ====================
@@ -44,7 +44,7 @@ export class AddressRepository implements IAddressRepository {
   async unsetAllDefault(userId: string): Promise<void> {
     await this.em.nativeUpdate(
       Address,
-      { user: userId, isDefault: true },
+      { userId, isDefault: true },
       { isDefault: false },
     );
   }

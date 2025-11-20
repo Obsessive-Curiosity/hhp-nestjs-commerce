@@ -27,6 +27,6 @@ import { WalletHistory } from '../domain/entity/wallet-history.entity';
       useClass: WalletHistoryRepository,
     },
   ],
-  exports: [WalletService],
+  exports: [WalletService, WalletHistoryService],
 })
 export class WalletModule {}

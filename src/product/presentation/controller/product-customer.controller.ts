@@ -16,12 +16,7 @@ export class ProductCustomerController {
   @Public()
   findAll(@Query() query: GetProductsQueryDto, @UserInfo() user?: Payload) {
     return this.productFacade.getProducts(
-      {
-        categoryId: query.categoryId,
-        minPrice: query.minPrice,
-        maxPrice: query.maxPrice,
-        search: query.search,
-      },
+      { categoryId: query.categoryId },
       user,
     );
   }

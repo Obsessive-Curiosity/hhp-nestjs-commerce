@@ -1,15 +1,11 @@
-import { Entity, PrimaryKey, Property, OneToOne, t } from '@mikro-orm/core';
+import { Entity, PrimaryKey, Property, t } from '@mikro-orm/core';
 import { BadRequestException } from '@nestjs/common';
-import { Product } from './product.entity';
 
 @Entity()
 export class ProductStock {
-  // Product 엔티티를 참조 (1:1 관계)
+  // Product ID (외래 키이자 기본 키)
   @PrimaryKey({ type: t.character, length: 36 })
   productId!: string;
-
-  @OneToOne(() => Product, { owner: true, primary: true })
-  product!: Product;
 
   // 재고 수량
   @Property({ type: t.integer })

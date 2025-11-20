@@ -29,9 +29,9 @@ export class CreateOrderDto {
   items: CreateOrderItemDto[];
 
   @IsOptional()
-  @IsArray({ message: '쿠폰 ID 목록은 배열이어야 합니다.' })
-  @IsUUID('4', { each: true, message: '올바른 쿠폰 ID 형식이 아닙니다.' })
-  couponIds?: string[];
+  @IsString({ message: '쿠폰 ID는 문자열이어야 합니다.' })
+  @IsUUID('4', { message: '올바른 쿠폰 ID 형식이 아닙니다.' })
+  couponId?: string;
 
   @IsOptional()
   @IsString({ message: '배송 요청사항은 문자열이어야 합니다.' })

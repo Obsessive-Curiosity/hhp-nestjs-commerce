@@ -1,4 +1,4 @@
-import { Entity, PrimaryKey, Property, Enum, t } from '@mikro-orm/core';
+import { Entity, PrimaryKey, Property, Enum, t, Index } from '@mikro-orm/core';
 import { BadRequestException } from '@nestjs/common';
 import { v7 as uuidv7 } from 'uuid';
 
@@ -19,6 +19,8 @@ export type CreateOrderItemProps = {
 };
 
 @Entity({ tableName: 'order_item' })
+@Index({ name: 'fk_order_item_orderId', properties: ['orderId'] })
+@Index({ name: 'fk_order_item_productId', properties: ['productId'] })
 export class OrderItem {
   @PrimaryKey({ type: t.character, length: 36 })
   id: string = uuidv7();
