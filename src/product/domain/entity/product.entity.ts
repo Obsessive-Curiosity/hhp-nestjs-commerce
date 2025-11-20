@@ -67,7 +67,7 @@ export class Product {
   createdAt: Date;
 
   // 상품 수정일
-  @Property({ onUpdate: () => new Date() })
+  @Property({ onCreate: () => new Date(), onUpdate: () => new Date() })
   updatedAt: Date;
 
   // 상품 삭제일 (null = 삭제되지 않음, Soft Delete)

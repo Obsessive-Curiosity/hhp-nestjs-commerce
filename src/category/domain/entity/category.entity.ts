@@ -21,7 +21,7 @@ export class Category {
   @Property({ onCreate: () => new Date() })
   createdAt: Date;
 
-  @Property({ onUpdate: () => new Date() })
+  @Property({ onCreate: () => new Date(), onUpdate: () => new Date() })
   updatedAt: Date;
 
   // =================== Constructor ===================

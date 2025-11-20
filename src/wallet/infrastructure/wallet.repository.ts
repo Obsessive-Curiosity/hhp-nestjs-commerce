@@ -1,4 +1,4 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/mysql';
 import { Wallet } from '../domain/entity/wallet.entity';
 import { IWalletRepository } from '../domain/interface/wallet.repository.interface';
@@ -26,28 +26,9 @@ export class WalletRepository implements IWalletRepository {
 
   // 지갑 업데이트 (낙관적 락 적용)
   async update(wallet: Wallet): Promise<Wallet> {
-    // 낙관적 락 적용 - 원자적 업데이트
-    const { userId, version, balance } = wallet;
-    const oldVersion = version - 1;
-
-    const updated = await this.em.nativeUpdate(
-      Wallet,
-      { userId, version: oldVersion },
-      {
-        balance,
-        version,
-      },
-    );
-
-    if (!updated) {
-      throw new ConflictException(
-        '지갑 업데이트 중 충돌이 발생했습니다. 다시 시도해주세요.',
-      );
-    }
-
-    // 최신 데이터 조회
-    const updatedWallet = await this.findByUserId(userId);
-    return updatedWallet!;
+    // MikroORM이 자동으로 version 증가 및 낙관적 락 적용
+    await this.em.flush();
+    return wallet;
   }
 
   // ==================== 삭제 (Delete) ====================

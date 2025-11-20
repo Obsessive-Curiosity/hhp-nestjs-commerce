@@ -64,7 +64,7 @@ export class Order {
   addressDetail!: string;
 
   // 배송 요청사항 (null = 없음)
-  @Property({ type: t.character, length: 500, nullable: true })
+  @Property({ type: t.text, nullable: true })
   deliveryRequest!: string | null;
 
   // 주문 생성일
@@ -72,7 +72,7 @@ export class Order {
   createdAt!: Date;
 
   // 주문 수정일
-  @Property({ onUpdate: () => new Date() })
+  @Property({ onCreate: () => new Date(), onUpdate: () => new Date() })
   updatedAt!: Date;
 
   // =================== Constructor ===================

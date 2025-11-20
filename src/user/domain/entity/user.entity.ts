@@ -72,7 +72,7 @@ export class User {
   createdAt: Date;
 
   // 사용자 수정일
-  @Property({ type: t.datetime, onUpdate: () => new Date() })
+  @Property({ type: t.datetime, onCreate: () => new Date(), onUpdate: () => new Date() })
   updatedAt: Date;
 
   // 사용자 삭제일 (null = 삭제되지 않음, Soft Delete)
