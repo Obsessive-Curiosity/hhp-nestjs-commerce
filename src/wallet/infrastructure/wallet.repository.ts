@@ -46,8 +46,8 @@ export class WalletRepository implements IWalletRepository {
     }
 
     // 최신 데이터 조회
-    const result = await this.findByUserId(userId);
-    return result!;
+    const updatedWallet = await this.findByUserId(userId);
+    return updatedWallet!;
   }
 
   // ==================== 삭제 (Delete) ====================

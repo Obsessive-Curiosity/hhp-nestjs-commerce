@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { UserService, CreateUserParams } from '../domain/service/user.service';
+import { UserService } from '../domain/service/user.service';
+import { CreateUserProps } from '../domain/types';
 import {
   UpdateUserDto,
   CreateAddressDto,
@@ -26,7 +27,7 @@ export class UserFacade {
   // ==================== 계정 생성 (Cross Domain) ====================
 
   // 내 계정 생성 (Cross Domain)
-  async createMyAccount(params: CreateUserParams) {
+  async createMyAccount(params: CreateUserProps) {
     return await this.userWalletUsecase.createMyAccount(params);
   }
 

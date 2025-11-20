@@ -4,6 +4,5 @@ import mikroOrmConfig from './mikro-orm.config.js';
 
 @Module({
   imports: [NestMikroOrmModule.forRoot(mikroOrmConfig)],
-  exports: [NestMikroOrmModule],
 })
 export class MikroOrmModule {}

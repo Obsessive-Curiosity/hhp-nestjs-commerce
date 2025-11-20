@@ -1,8 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import {
-  UserService,
-  CreateUserParams,
-} from '../../domain/service/user.service';
+import { UserService } from '../../domain/service/user.service';
+import { CreateUserProps } from '../../domain/types';
 import { WalletService } from '@/wallet/domain/service/wallet.service';
 import { CreateAccountResponseDto, GetMyInfoResponseDto } from '../dto';
 
@@ -19,7 +17,7 @@ export class UserWalletUsecase {
 
   // 계정 생성 (사용자 생성 + 지갑 초기화)
   async createMyAccount(
-    params: CreateUserParams,
+    params: CreateUserProps,
   ): Promise<CreateAccountResponseDto> {
     // 1. 사용자 생성 (User Domain)
     const user = await this.userService.createUser(params);
