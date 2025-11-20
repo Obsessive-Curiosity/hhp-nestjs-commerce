@@ -42,7 +42,7 @@ export class Promotion {
   createdAt: Date;
 
   // 프로모션 수정일
-  @Property({ type: t.datetime, onUpdate: () => new Date() })
+  @Property({ type: t.datetime, onCreate: () => new Date(), onUpdate: () => new Date() })
   updatedAt: Date;
 
   // =================== Constructor ===================

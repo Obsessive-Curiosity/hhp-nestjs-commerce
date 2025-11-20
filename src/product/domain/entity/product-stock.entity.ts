@@ -16,7 +16,7 @@ export class ProductStock {
   createdAt: Date;
 
   // 재고 수정일
-  @Property({ onUpdate: () => new Date() })
+  @Property({ onCreate: () => new Date(), onUpdate: () => new Date() })
   updatedAt: Date;
 
   // 낙관적 락을 위한 버전
