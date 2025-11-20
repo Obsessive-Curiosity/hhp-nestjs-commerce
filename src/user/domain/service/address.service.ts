@@ -69,7 +69,7 @@ export class AddressService {
     const address = await this.getAddressById(addressId);
 
     // 주소 소유자 확인
-    if (address.user.id !== userId) {
+    if (address.userId !== userId) {
       throw new BadRequestException('해당 주소를 수정할 권한이 없습니다.');
     }
 
@@ -87,7 +87,7 @@ export class AddressService {
     const address = await this.getAddressById(addressId);
 
     // 주소 소유자 확인
-    if (address.user.id !== userId) {
+    if (address.userId !== userId) {
       throw new BadRequestException('해당 주소를 수정할 권한이 없습니다.');
     }
 
@@ -106,7 +106,7 @@ export class AddressService {
     const address = await this.getAddressById(addressId);
 
     // 주소 소유자 확인
-    if (address.user.id !== userId) {
+    if (address.userId !== userId) {
       throw new BadRequestException('해당 주소를 삭제할 권한이 없습니다.');
     }
 

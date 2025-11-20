@@ -2,12 +2,9 @@ import {
   Entity,
   PrimaryKey,
   Property,
-  OneToMany,
-  Collection,
   Unique,
 } from '@mikro-orm/core';
 import { BadRequestException } from '@nestjs/common';
-import { Product } from '@/product/domain/entity/product.entity';
 
 @Entity()
 @Unique({ name: 'uq_category_name', properties: ['name'] })
@@ -26,11 +23,6 @@ export class Category {
 
   @Property({ onUpdate: () => new Date() })
   updatedAt: Date;
-
-  // ==================== Relations ====================
-
-  @OneToMany(() => Product, (product) => product.category)
-  products = new Collection<Product>(this);
 
   // =================== Constructor ===================
 

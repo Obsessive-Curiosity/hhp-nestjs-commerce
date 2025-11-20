@@ -2,17 +2,16 @@ import {
   Entity,
   PrimaryKey,
   Property,
-  ManyToOne,
-  OneToOne,
   t,
   Index,
+  ManyToOne,
+  OneToOne,
+  Cascade,
 } from '@mikro-orm/core';
 import { v7 as uuidv7 } from 'uuid';
 import { BadRequestException } from '@nestjs/common';
-import { Role } from '@/user/domain/entity/user.entity';
 import { Category } from '@/category/domain/entity/category.entity';
 import { ProductStock } from './product-stock.entity';
-import { getRolePermissions } from '../utils/role-permissions.utils';
 
 export type CreateProductProps = {
   categoryId: number;
@@ -29,12 +28,22 @@ export class Product {
   @PrimaryKey({ type: t.character, length: 36 })
   id: string = uuidv7();
 
-  // Category 엔티티를 참조 (N:1 관계)
   @Property()
   categoryId!: number;
 
-  // 상품명
-  @Property({ type: t.string })
+  @ManyToOne(() => Category, {
+    fieldName: 'categoryId', // 외래 키 매핑
+    persist: false, // 조회 전용
+  })
+  category!: Category;
+
+  @OneToOne(() => ProductStock, {
+    cascade: [Cascade.REMOVE],
+    orphanRemoval: true,
+  })
+  stock!: ProductStock;
+
+  @Property()
   name!: string;
 
   // 소매가 (B2C 가격)
@@ -50,28 +59,20 @@ export class Product {
   description!: string;
 
   // 상품 이미지 URL
-  @Property({ type: t.string, nullable: true })
+  @Property({ nullable: true })
   imageUrl: string | null = null;
 
   // 상품 생성일
-  @Property({ type: t.datetime, onCreate: () => new Date() })
+  @Property({ onCreate: () => new Date() })
   createdAt: Date;
 
   // 상품 수정일
-  @Property({ type: t.datetime, onUpdate: () => new Date() })
+  @Property({ onUpdate: () => new Date() })
   updatedAt: Date;
 
   // 상품 삭제일 (null = 삭제되지 않음, Soft Delete)
-  @Property({ type: t.datetime, nullable: true })
+  @Property({ nullable: true })
   deletedAt!: Date | null;
-
-  // ==================== Relations ====================
-
-  @ManyToOne(() => Category)
-  category!: Category;
-
-  @OneToOne(() => ProductStock, { mappedBy: 'product', nullable: true })
-  stock?: ProductStock;
 
   // =================== Constructor ===================
 
@@ -109,23 +110,6 @@ export class Product {
   // 활성 상품 확인
   isActive(): boolean {
     return !this.isDeleted();
-  }
-
-  // 역할에 따른 가격 조회
-  getPrice(role?: Role): number {
-    const { isB2B } = getRolePermissions(role);
-
-    if (isB2B) {
-      if (!this.wholesalePrice) {
-        throw new BadRequestException('도매가가 설정되지 않은 상품입니다.');
-      }
-      return this.wholesalePrice;
-    } else {
-      if (!this.retailPrice) {
-        throw new BadRequestException('소매가가 설정되지 않은 상품입니다.');
-      }
-      return this.retailPrice;
-    }
   }
 
   // ======================= 수정 =======================
