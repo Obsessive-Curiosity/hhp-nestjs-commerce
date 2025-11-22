@@ -25,6 +25,9 @@ export interface IOrderItemRepository {
   // 주문 항목 삭제 (물리 삭제 - 실제 사용은 거의 없음)
   delete(orderItemId: string): Promise<void>;
 
+  // 주문별 주문 항목 일괄 삭제 (트랜잭션 롤백용)
+  deleteByOrderId(orderId: string): Promise<number>;
+
   // 주문별 주문 항목 총 개수 조회
   countByOrderId(orderId: string): Promise<number>;
 }

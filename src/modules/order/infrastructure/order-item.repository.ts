@@ -63,4 +63,9 @@ export class OrderItemRepository implements IOrderItemRepository {
       await this.em.removeAndFlush(orderItem);
     }
   }
+
+  // 주문별 주문 항목 일괄 삭제 (트랜잭션 롤백용)
+  async deleteByOrderId(orderId: string): Promise<number> {
+    return this.em.nativeDelete(OrderItem, { orderId });
+  }
 }

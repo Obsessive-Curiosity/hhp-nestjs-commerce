@@ -112,12 +112,8 @@ export class OrderItemService {
 
   // ==================== 삭제 (Delete) ====================
 
-  // 주문별 주문 항목 삭제 (트랜잭션 롤백용)
-  async deleteByOrderId(orderId: string): Promise<void> {
-    const orderItems = await this.findOrderItemsByOrderId(orderId);
-
-    for (const item of orderItems) {
-      await this.orderItemRepository.delete(item.id);
-    }
+  // 주문별 주문 항목 일괄 삭제 (트랜잭션 롤백용)
+  async deleteMany(orderId: string): Promise<number> {
+    return await this.orderItemRepository.deleteByOrderId(orderId);
   }
 }

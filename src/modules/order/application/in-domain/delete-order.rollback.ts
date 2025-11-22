@@ -13,7 +13,7 @@ export class DeleteOrderRollback {
   // 주문 및 주문 항목 삭제 실행
   async execute(order: Order): Promise<void> {
     // 1. 주문 항목 먼저 삭제 (FK 제약조건)
-    await this.orderItemService.deleteByOrderId(order.id);
+    await this.orderItemService.deleteMany(order.id);
 
     // 2. 주문 삭제
     await this.orderService.deleteOrder(order);
