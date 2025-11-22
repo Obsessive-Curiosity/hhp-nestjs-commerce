@@ -40,6 +40,24 @@ export class UserService {
     return !!user;
   }
 
+  // 사용자 인증 (이메일 + 비밀번호)
+  async authenticateUser(email: string, password: string): Promise<User> {
+    const user = await this.userRepository.findByEmail(email);
+
+    if (!user || user.isDeleted()) {
+      throw new BadRequestException('잘못된 로그인 정보 입니다!');
+    }
+
+    // 비밀번호 검증
+    const passOK = await this.passwordService.verify(password, user.password);
+
+    if (!passOK) {
+      throw new BadRequestException('잘못된 로그인 정보 입니다!');
+    }
+
+    return user;
+  }
+
   // ==================== 생성 (Create) ====================
 
   // 사용자 생성
