@@ -12,17 +12,18 @@ export class OrderController {
   constructor(private readonly orderFacade: OrderFacade) {}
 
   /**
-   * 주문 생성
-   * POST /orders
+   * 주문 생성 및 결제 처리
+   * POST /orders/payment
    */
-  @Post()
-  async createOrder(
+  @Post('payment')
+  async processPayment(
     @UserInfo() user: Payload,
     @Body() createOrderDto: CreateOrderDto,
   ) {
-    const result = await this.orderFacade.createOrder(user, createOrderDto);
+    const result = await this.orderFacade.processPayment(user, createOrderDto);
 
     return {
+      message: result.message,
       id: result.order.id,
       status: result.order.status,
       basePrice: result.order.basePrice,
@@ -36,7 +37,6 @@ export class OrderController {
         discountAmount: item.discountAmount,
         paymentAmount: item.paymentAmount,
       })),
-      excludedProducts: result.excludedProducts,
       createdAt: result.order.createdAt,
     };
   }
@@ -57,18 +57,6 @@ export class OrderController {
   @Get(':orderId')
   async getOrder(@UserInfo() user: Payload, @Param('orderId') orderId: string) {
     return this.orderFacade.getOrderDetail(orderId, user.sub);
-  }
-
-  /**
-   * 주문 결제
-   * POST /orders/:orderId/payment
-   */
-  @Post(':orderId/payment')
-  async processPayment(
-    @UserInfo() user: Payload,
-    @Param('orderId') orderId: string,
-  ) {
-    return this.orderFacade.processPayment(orderId, user.sub);
   }
 
   /**

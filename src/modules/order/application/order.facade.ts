@@ -3,8 +3,6 @@ import { OrderStatus } from '../domain/entity/order.entity';
 import { OrderService } from '../domain/service/order.service';
 import { OrderItemService } from '../domain/service/order-item.service';
 import { ProcessPaymentUseCase } from './cross-domain/process-payment.usecase';
-import { CreateOrderUseCase } from './cross-domain/create-order.usecase';
-import { CancelOrderUseCase } from './cross-domain/cancel-order.usecase';
 import { CreateOrderDto } from '../presentation/dto';
 import { Payload } from '@/common/types/express';
 
@@ -13,28 +11,21 @@ export class OrderFacade {
   constructor(
     private readonly orderService: OrderService,
     private readonly orderItemService: OrderItemService,
-    private readonly createOrderUseCase: CreateOrderUseCase,
     private readonly processPaymentUseCase: ProcessPaymentUseCase,
-    private readonly cancelOrderUseCase: CancelOrderUseCase,
   ) {}
 
   /**
-   * 주문 생성
+   * 주문 생성 및 결제 처리
    */
-  async createOrder(user: Payload, dto: CreateOrderDto) {
-    return this.createOrderUseCase.execute(user, dto);
+  async processPayment(user: Payload, dto: CreateOrderDto) {
+    return await this.processPaymentUseCase.execute(user, dto);
   }
 
   /**
    * 주문 목록 조회 (사용자)
    */
   async getUserOrders(userId: string) {
-    const orders = await this.orderService.findUserOrders(
-      userId,
-      undefined,
-      undefined,
-      { includeOrderItems: true },
-    );
+    const orders = await this.orderService.findUserOrders(userId);
 
     return { orders };
   }
@@ -60,9 +51,7 @@ export class OrderFacade {
    * 모든 주문 조회 (관리자)
    */
   async getAllOrders() {
-    const orders = await this.orderService.findAllOrders(undefined, undefined, {
-      includeOrderItems: true,
-    });
+    const orders = await this.orderService.findAllOrders();
 
     return { orders };
   }
@@ -76,16 +65,13 @@ export class OrderFacade {
   }
 
   /**
-   * 결제 처리
-   */
-  async processPayment(orderId: string, userId: string) {
-    return this.processPaymentUseCase.execute(orderId, userId);
-  }
-
-  /**
    * 주문 취소
    */
   async cancelOrder(orderId: string, userId: string) {
-    return this.cancelOrderUseCase.execute(orderId, userId);
+    // 주문 권한 검증
+    await this.orderService.validateOrderOwnership(orderId, userId);
+
+    // 주문 취소 처리
+    return await this.orderService.cancelOrder(orderId);
   }
 }
