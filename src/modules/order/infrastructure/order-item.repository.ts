@@ -37,14 +37,6 @@ export class OrderItemRepository implements IOrderItemRepository {
     return this.em.count(OrderItem, { orderId });
   }
 
-  // ==================== 생성 (Create) ====================
-
-  // 주문 항목 생성
-  async create(orderItem: OrderItem): Promise<OrderItem> {
-    await this.em.persistAndFlush(orderItem);
-    return orderItem;
-  }
-
   // ==================== 생성 (Batch) ====================
 
   // 여러 주문 항목 일괄 생성

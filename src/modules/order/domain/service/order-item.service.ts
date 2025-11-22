@@ -42,22 +42,6 @@ export class OrderItemService {
     return this.orderItemRepository.countByOrderId(orderId);
   }
 
-  // ==================== 생성 (Create) ====================
-
-  // 새 주문 항목 생성
-  async createOrderItem(params: {
-    orderId: string;
-    productId: string;
-    quantity: number;
-    unitPrice: number;
-    discountAmount: number;
-    paymentAmount: number;
-  }): Promise<OrderItem> {
-    const orderItem = OrderItem.create(params);
-
-    return this.orderItemRepository.create(orderItem);
-  }
-
   // ==================== 생성 (Batch) ====================
 
   // 여러 주문 항목 일괄 생성

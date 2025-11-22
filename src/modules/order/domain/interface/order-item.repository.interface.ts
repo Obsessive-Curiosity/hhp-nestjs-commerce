@@ -16,9 +16,6 @@ export interface IOrderItemRepository {
   // 상품 ID로 주문 항목 목록 조회
   findByProductId(productId: string): Promise<OrderItem[]>;
 
-  // 주문 항목 생성
-  create(orderItem: OrderItem): Promise<OrderItem>;
-
   // 여러 주문 항목 일괄 생성
   createMany(orderItems: OrderItem[]): Promise<OrderItem[]>;
 
