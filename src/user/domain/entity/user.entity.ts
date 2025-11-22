@@ -68,19 +68,22 @@ export class User {
   // =================== Timestamps ===================
 
   // 사용자 생성일
-  @Property({ type: t.datetime, onCreate: () => new Date() })
+  @Property({ onCreate: () => new Date() })
   createdAt: Date;
 
   // 사용자 수정일
-  @Property({ type: t.datetime, onCreate: () => new Date(), onUpdate: () => new Date() })
+  @Property({
+    onCreate: () => new Date(),
+    onUpdate: () => new Date(),
+  })
   updatedAt: Date;
 
   // 사용자 삭제일 (null = 삭제되지 않음, Soft Delete)
-  @Property({ type: t.datetime, nullable: true })
+  @Property({ nullable: true })
   deletedAt!: Date | null;
 
   // 마지막 로그인 일시 (null = 로그인 기록 없음)
-  @Property({ type: t.datetime, nullable: true })
+  @Property({ nullable: true })
   lastLoginAt!: Date | null;
 
   // =================== Constructor ===================

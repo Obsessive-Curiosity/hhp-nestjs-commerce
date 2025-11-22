@@ -30,19 +30,19 @@ export class Promotion {
   freeQuantity!: number;
 
   // 프로모션 시작일
-  @Property({ type: t.datetime })
+  @Property()
   startAt!: Date;
 
   // 프로모션 종료일 (null = 무기한)
-  @Property({ type: t.datetime, nullable: true })
+  @Property({ nullable: true })
   endAt: Date | null = null;
 
   // 프로모션 생성일
-  @Property({ type: t.datetime, onCreate: () => new Date() })
+  @Property({ onCreate: () => new Date() })
   createdAt: Date;
 
   // 프로모션 수정일
-  @Property({ type: t.datetime, onCreate: () => new Date(), onUpdate: () => new Date() })
+  @Property({ onCreate: () => new Date(), onUpdate: () => new Date() })
   updatedAt: Date;
 
   // =================== Constructor ===================
