@@ -53,7 +53,6 @@ import { CategoryModule } from '@/category/infrastructure/category.module';
   ],
   exports: [
     ProductService,
-    PromotionService,
     StockService,
     DeductStockTransaction,
     RestoreStockTransaction,

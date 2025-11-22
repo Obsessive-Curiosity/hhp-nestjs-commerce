@@ -20,6 +20,6 @@ import { CartUseCase } from '../application/cart.usecase';
       useClass: CartRepository,
     },
   ],
-  exports: [CartService, CartFacade],
+  exports: [CartService],
 })
 export class CartModule {}

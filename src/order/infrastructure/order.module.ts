@@ -25,10 +25,10 @@ import { DeleteOrderRollback } from '../application/in-domain/delete-order.rollb
 @Module({
   imports: [
     ProductModule, // ProductService, StockService
-    WalletModule,  // WalletService
-    CartModule,    // CartService
-    UserModule,    // UserService, AddressService
-    CouponModule,  // UserCouponService
+    WalletModule, // WalletService
+    CartModule, // CartService
+    UserModule, // UserService, AddressService
+    CouponModule, // UserCouponService
   ],
   controllers: [OrderController, OrderAdminController],
   providers: [
@@ -54,6 +54,6 @@ import { DeleteOrderRollback } from '../application/in-domain/delete-order.rollb
     // Application Facade
     OrderFacade,
   ],
-  exports: [OrderService, OrderFacade],
+  exports: [OrderService],
 })
 export class OrderModule {}

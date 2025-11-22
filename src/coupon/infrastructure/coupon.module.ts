@@ -8,7 +8,6 @@ import { COUPON_REPOSITORY } from '../domain/interface/coupon.repository.interfa
 import { USER_COUPON_REPOSITORY } from '../domain/interface/user-coupon.repository.interface';
 import { CouponRepository } from './coupon.repository';
 import { UserCouponRepository } from './user-coupon.repository';
-import { RestoreCouponRollback } from '../application/in-domain/restore-coupon.rollback';
 
 @Module({
   controllers: [CouponAdminController, CouponCustomerController],
@@ -27,14 +26,10 @@ import { RestoreCouponRollback } from '../application/in-domain/restore-coupon.r
     UserCouponService,
     // Application Facade
     CouponFacade,
-    // Rollbacks
-    RestoreCouponRollback,
   ],
   exports: [
-    CouponFacade,
     CouponService,
     UserCouponService,
-    RestoreCouponRollback,
   ],
 })
 export class CouponModule {}
