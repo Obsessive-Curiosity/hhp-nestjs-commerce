@@ -3,7 +3,7 @@ import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { JwtConfigValidator } from '../../config/validators/jwt-config.validator';
 import { Payload } from '../../common/types/express';
 import { SignupDto } from './dto/signup.dto';
-import { UserFacade } from '@/modules/user/application/user.facade';
+import { UserWalletUsecase } from '@/modules/user/application/cross-domain/user-wallet.usecase';
 import { UserService } from '@/modules/user/domain/service/user.service';
 
 @Injectable()
@@ -11,14 +11,14 @@ export class AuthService {
   constructor(
     private readonly jwtService: JwtService,
     private readonly jwtConfig: JwtConfigValidator,
-    private readonly userFacade: UserFacade,
+    private readonly userWalletUsecase: UserWalletUsecase,
     private readonly userService: UserService,
   ) {}
 
   // 회원가입
   async signup(dto: SignupDto) {
-    // UserFacade에 위임 (사용자 생성 + 지갑 초기화)
-    return await this.userFacade.createMyAccount(dto);
+    // UserWalletUsecase에 위임 (사용자 생성 + 지갑 초기화)
+    return await this.userWalletUsecase.createMyAccount(dto);
   }
 
   async login(user: Payload | undefined) {

@@ -41,6 +41,6 @@ import { Address } from '../domain/entity/address.entity';
       useClass: AddressRepository,
     },
   ],
-  exports: [UserService, AddressService],
+  exports: [UserService, AddressService, UserWalletUsecase],
 })
 export class UserModule {}
