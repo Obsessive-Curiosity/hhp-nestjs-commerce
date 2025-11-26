@@ -7,16 +7,11 @@ export const envValidationSchema = Joi.object({
     .default('development'),
 
   // MySQL
-  MYSQL_ROOT_PASSWORD: Joi.string().required(),
-  MYSQL_DATABASE: Joi.string().required(),
-  MYSQL_DB_HOST: Joi.string().default('localhost'),
+  MYSQL_DB_HOST: Joi.string().default('my-db-server'),
   MYSQL_DB_PORT: Joi.number().default(3306),
   MYSQL_DB_USER: Joi.string().default('root'),
   MYSQL_DB_PASSWORD: Joi.string().required(),
   MYSQL_DB_NAME: Joi.string().required(),
-
-  // Database URL (Prisma)
-  DATABASE_URL: Joi.string().required(),
 
   // Redis
   REDIS_CACHE_HOST: Joi.string().required(),
