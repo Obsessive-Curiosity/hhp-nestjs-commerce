@@ -24,6 +24,7 @@ import { LockModule } from '@/common/lock/lock.module';
   imports: [
     MikroOrmModule.forFeature([Product, Stock, Promotion]),
     CategoryModule,
+    LockModule,
   ],
   controllers: [ProductAdminController, ProductCustomerController],
   providers: [
@@ -36,10 +37,7 @@ import { LockModule } from '@/common/lock/lock.module';
       provide: PROMOTION_REPOSITORY,
       useClass: PromotionRepository,
     },
-    {
-      provide: STOCK_REPOSITORY,
-      useClass: StockRepository,
-    },
+    StockRepository,
     // Domain Services
     ProductService,
     PromotionService,
