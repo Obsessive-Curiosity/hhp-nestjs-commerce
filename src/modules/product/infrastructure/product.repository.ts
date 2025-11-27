@@ -41,32 +41,46 @@ export class ProductRepository implements IProductRepository {
     const { isB2B } = getRolePermissions(role); // 역할에 따른 B2B 여부 확인
     const { categoryId } = filters || {}; // 필터에서 카테고리 ID 추출
 
-    const priceField = isB2B ? 'p.wholesalePrice' : 'p.retailPrice'; // 가격 필드 결정
-    const selectFields = this.buildProductSelectFields(priceField); // select 필드 생성
+    const priceField = isB2B ? 'wholesale_price' : 'retail_price'; // 가격 필드
 
-    const qb = this.em
-      .createQueryBuilder(Product, 'p')
-      .leftJoin('p.category', 'c')
-      .leftJoin('p.stock', 's')
-      .select(selectFields)
-      .where({ 'p.deletedAt': null });
+    // 쿼리 파라미터
+    const params: any[] = [];
+
+    // 기본 쿼리
+    let sql = `
+      SELECT
+        p.id,
+        p.name,
+        p.${priceField} as price,
+        p.description,
+        p.image_url as imageUrl,
+        p.created_at as createdAt,
+        p.updated_at as updatedAt,
+        c.name as categoryName,
+        s.quantity as stockQuantity
+      FROM product p
+      LEFT JOIN category c ON p.category_id = c.id
+      INNER JOIN stock s ON p.id = s.product_id
+      WHERE p.deleted_at IS NULL
+    `;
 
     // 역할에 따른 가격 필터링
     if (isB2B) {
-      qb.andWhere({ 'p.wholesalePrice': { $ne: null } });
+      sql += ` AND p.wholesale_price IS NOT NULL`;
     } else {
-      qb.andWhere({ 'p.retailPrice': { $ne: null } });
+      sql += ` AND p.retail_price IS NOT NULL`;
     }
 
     // 카테고리 필터링
     if (categoryId) {
-      qb.andWhere({ 'p.categoryId': categoryId });
+      sql += ` AND p.category_id = ?`;
+      params.push(categoryId);
     }
 
     // 최신 수정일 기준 정렬
-    qb.orderBy({ 'p.updatedAt': 'DESC' });
+    sql += ` ORDER BY p.updated_at DESC`;
 
-    const products = await qb.execute<ProductWithDetails[]>('all');
+    const products = await this.em.execute<ProductWithDetails[]>(sql, params);
 
     return products;
   }
@@ -78,19 +92,28 @@ export class ProductRepository implements IProductRepository {
   ): Promise<ProductWithDetails | null> {
     const { isB2B } = getRolePermissions(role); // 역할에 따른 B2B 여부 확인
 
-    const priceField = isB2B ? 'p.wholesalePrice' : 'p.retailPrice'; // 가격 필드 결정
-    const selectFields = this.buildProductSelectFields(priceField); // select 필드 생성
+    const priceField = isB2B ? 'wholesale_price' : 'retail_price'; // 가격 필드
 
-    const qb = this.em
-      .createQueryBuilder(Product, 'p')
-      .leftJoin('p.category', 'c')
-      .leftJoin('p.stock', 's')
-      .select(selectFields)
-      .where({ 'p.id': id, 'p.deletedAt': null });
+    const sql = `
+      SELECT
+        p.id,
+        p.name,
+        p.${priceField} as price,
+        p.description,
+        p.image_url as imageUrl,
+        p.created_at as createdAt,
+        p.updated_at as updatedAt,
+        c.name as categoryName,
+        s.quantity as stockQuantity
+      FROM product p
+      LEFT JOIN category c ON p.category_id = c.id
+      INNER JOIN stock s ON p.id = s.product_id
+      WHERE p.id = ? AND p.deleted_at IS NULL
+      LIMIT 1
+    `;
 
-    const product = await qb.execute<ProductWithDetails>('get'); // 단일 결과 조회
-
-    return product;
+    const results = await this.em.execute<ProductWithDetails[]>(sql, [id]);
+    return results[0] || null;
   }
 
   // ==================== 생성 (Create) ====================
@@ -122,22 +145,5 @@ export class ProductRepository implements IProductRepository {
       product.softDelete();
       await this.em.flush();
     }
-  }
-
-  // ==================== Private Methods ====================
-
-  // 상품 상세 조회용 select 필드 생성
-  private buildProductSelectFields(priceField: string): string[] {
-    return [
-      'p.id as id',
-      'p.name as name',
-      `${priceField} as price`,
-      'p.description as description',
-      'p.imageUrl as imageUrl',
-      'p.createdAt as createdAt',
-      'p.updatedAt as updatedAt',
-      'c.name as categoryName',
-      'COALESCE(s.quantity, 0) as stockQuantity',
-    ];
   }
 }
