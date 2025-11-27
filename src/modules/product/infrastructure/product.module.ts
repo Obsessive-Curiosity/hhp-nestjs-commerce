@@ -11,18 +11,18 @@ import { DeductStockTransaction } from '../application/in-domain/deduct-stock.tr
 import { RestoreStockTransaction } from '../application/in-domain/restore-stock.transaction';
 import { PRODUCT_REPOSITORY } from '../domain/interface/product.repository.interface';
 import { PROMOTION_REPOSITORY } from '../domain/interface/promotion.repository.interface';
-import { STOCK_REPOSITORY } from '../domain/interface/stock.repository.interface';
 import { ProductRepository } from './product.repository';
 import { PromotionRepository } from './promotion.repository';
 import { StockRepository } from './stock.repository';
 import { Product } from '../domain/entity/product.entity';
-import { ProductStock } from '../domain/entity/product-stock.entity';
+import { Stock } from '../domain/entity/stock.entity';
 import { Promotion } from '../domain/entity/promotion.entity';
 import { CategoryModule } from '@/modules/category/infrastructure/category.module';
+import { LockModule } from '@/common/lock/lock.module';
 
 @Module({
   imports: [
-    MikroOrmModule.forFeature([Product, ProductStock, Promotion]),
+    MikroOrmModule.forFeature([Product, Stock, Promotion]),
     CategoryModule,
   ],
   controllers: [ProductAdminController, ProductCustomerController],
