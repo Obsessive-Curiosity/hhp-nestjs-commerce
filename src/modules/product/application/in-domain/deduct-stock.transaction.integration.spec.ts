@@ -5,31 +5,64 @@ import {
   cleanupTestDatabase,
   clearTestData,
   TestDatabase,
-} from '../../../../test/setup/database.setup';
+} from '../../../../../test/setup/database.setup';
+import {
+  setupTestRedis,
+  cleanupTestRedis,
+  TestRedis,
+} from '../../../../../test/setup/redis.setup';
 import { DeductStockTransaction } from './deduct-stock.transaction';
 import { StockService } from '../../domain/service/stock.service';
 import { StockRepository } from '../../infrastructure/stock.repository';
+import { DistributedLockManager } from '@/common/lock/distributed-lock-manager.service';
+import { DistributedLockService } from '@/common/lock/distributed-lock.service';
+import { RedisService } from '@/common/cache/redis.service';
 import { Category } from '../../../category/domain/entity/category.entity';
 import { Product } from '../../domain/entity/product.entity';
-import { ProductStock } from '../../domain/entity/product-stock.entity';
+import { Stock } from '../../domain/entity/stock.entity';
 
 describe('DeductStockTransaction - 동시성 테스트', () => {
   let testDb: TestDatabase;
+  let testRedis: TestRedis;
   let orm: MikroORM<MySqlDriver>;
+  let distributedLockService: DistributedLockService;
+  let distributedLockManager: DistributedLockManager;
+
+  // 헬퍼 함수: 각 요청마다 독립적인 DeductStockTransaction 생성
+  const createDeductStockTransaction = () => {
+    const em = orm.em.fork();
+    const stockRepository = new StockRepository(em);
+    const stockService = new StockService(stockRepository);
+    return new DeductStockTransaction(stockService, distributedLockManager);
+  };
 
   beforeAll(async () => {
     // TestContainers MySQL 시작
-    testDb = await setupTestDatabase();
-    orm = testDb.orm;
+    testDb = await setupTestDatabase(); // 테스트 DB 설정
+    orm = testDb.orm; // MikroORM 인스턴스
+
+    // TestContainers Redis 시작
+    testRedis = await setupTestRedis(); // 테스트 Redis 설정
+
+    // Mock RedisService를 사용하여 testRedis.redis 클라이언트 재사용
+    const mockRedisService = {
+      getCacheClient: () => testRedis.redis,
+    } as RedisService;
+
+    distributedLockService = new DistributedLockService(mockRedisService); // Redis 기반 분산 락 서비스
+    distributedLockManager = new DistributedLockManager(distributedLockService); // 분산락 트랜잭션 매니저
   }, 60000); // 컨테이너 시작 시간 여유
 
   afterAll(async () => {
     await cleanupTestDatabase(testDb);
+    await cleanupTestRedis(testRedis);
   });
 
   beforeEach(async () => {
     // 각 테스트 전 데이터 초기화
     await clearTestData(orm);
+    // Redis 데이터 초기화 (락, 캐시 등 삭제)
+    await testRedis.redis.flushall();
   });
 
   describe('동시 재고 차감', () => {
@@ -52,7 +85,7 @@ describe('DeductStockTransaction - 동시성 테스트', () => {
         em.persist(product);
         await em.flush(); // productId를 얻기 위해 flush
 
-        const stock = ProductStock.create(10);
+        const stock = Stock.create(10);
         stock.productId = product.id;
         em.persist(stock);
 
@@ -61,15 +94,8 @@ describe('DeductStockTransaction - 동시성 테스트', () => {
 
       // When: 10명이 동시에 재고 1개씩 차감
       const concurrentRequests = Array.from({ length: 10 }, () =>
-        orm.em.fork().transactional(async (em) => {
-          // 각 요청마다 새로운 EntityManager 사용
-          const stockRepository = new StockRepository(em);
-          const stockService = new StockService(stockRepository);
-          const transaction = new DeductStockTransaction(stockService);
-
-          return transaction.execute({
-            items: [{ productId: product.id, quantity: 1 }],
-          });
+        createDeductStockTransaction().execute({
+          items: [{ productId: product.id, quantity: 1 }],
         }),
       );
 
@@ -78,12 +104,13 @@ describe('DeductStockTransaction - 동시성 테스트', () => {
       // Then: 모든 요청이 성공해야 함
       expect(results).toHaveLength(10);
       results.forEach((result) => {
-        expect(result.deductedItems).toHaveLength(1);
-        expect(result.deductedItems[0].productId).toBe(product.id);
+        expect(result.successfulItems).toHaveLength(1);
+        expect(result.successfulItems[0].productId).toBe(product.id);
+        expect(result.failedItems).toHaveLength(0);
       });
 
       // 최종 재고 확인
-      const finalStock = await orm.em.fork().findOne(ProductStock, {
+      const finalStock = await orm.em.fork().findOne(Stock, {
         productId: product.id,
       });
       expect(finalStock?.quantity).toBe(0);
@@ -108,7 +135,7 @@ describe('DeductStockTransaction - 동시성 테스트', () => {
         em.persist(product);
         await em.flush();
 
-        const stock = ProductStock.create(5);
+        const stock = Stock.create(5);
         stock.productId = product.id;
         em.persist(stock);
 
@@ -117,40 +144,44 @@ describe('DeductStockTransaction - 동시성 테스트', () => {
 
       // When: 10명이 동시에 재고 1개씩 차감 시도
       const concurrentRequests = Array.from({ length: 10 }, () =>
-        orm.em
-          .fork()
-          .transactional(async (em) => {
-            const stockRepository = new StockRepository(em);
-            const stockService = new StockService(stockRepository);
-            const transaction = new DeductStockTransaction(stockService);
-
-            return transaction.execute({
-              items: [{ productId: product.id, quantity: 1 }],
-            });
-          })
-          .catch((error: Error) => error),
+        createDeductStockTransaction().execute({
+          items: [{ productId: product.id, quantity: 1 }],
+        }),
       );
 
       const results = await Promise.all(concurrentRequests);
 
       // Then: 5개는 성공, 5개는 실패
-      const successes = results.filter(
-        (
-          r,
-        ): r is {
-          deductedItems: Array<{ productId: string; quantity: number }>;
-        } =>
-          !(r instanceof Error) &&
-          'deductedItems' in r &&
-          r.deductedItems.length > 0,
-      );
-      const failures = results.filter((r): r is Error => r instanceof Error);
+      const successCount = results.filter(
+        (r) => r.successfulItems.length > 0,
+      ).length;
+      const failureCount = results.filter(
+        (r) => r.failedItems.length > 0,
+      ).length;
 
-      expect(successes.length).toBe(5);
-      expect(failures.length).toBe(5);
+      expect(successCount).toBe(5);
+      expect(failureCount).toBe(5);
+
+      // 성공한 요청은 successfulItems에 데이터가 있어야 함
+      results
+        .filter((r) => r.successfulItems.length > 0)
+        .forEach((result) => {
+          expect(result.successfulItems).toHaveLength(1);
+          expect(result.successfulItems[0].productId).toBe(product.id);
+          expect(result.failedItems).toHaveLength(0);
+        });
+
+      // 실패한 요청은 failedItems에 데이터가 있어야 함
+      results
+        .filter((r) => r.failedItems.length > 0)
+        .forEach((result) => {
+          expect(result.failedItems).toHaveLength(1);
+          expect(result.failedItems[0].item.productId).toBe(product.id);
+          expect(result.successfulItems).toHaveLength(0);
+        });
 
       // 최종 재고는 0이어야 함
-      const finalStock = await orm.em.fork().findOne(ProductStock, {
+      const finalStock = await orm.em.fork().findOne(Stock, {
         productId: product.id,
       });
       expect(finalStock?.quantity).toBe(0);
@@ -186,11 +217,11 @@ describe('DeductStockTransaction - 동시성 테스트', () => {
 
         await em.flush();
 
-        const stock1 = ProductStock.create(10);
+        const stock1 = Stock.create(10);
         stock1.productId = product1.id;
         em.persist(stock1);
 
-        const stock2 = ProductStock.create(10);
+        const stock2 = Stock.create(10);
         stock2.productId = product2.id;
         em.persist(stock2);
 
@@ -202,41 +233,36 @@ describe('DeductStockTransaction - 동시성 테스트', () => {
 
       // When: 10명이 동시에 [상품1, 상품2] 또는 [상품2, 상품1] 순서로 차감
       // DeductStockTransaction은 productId로 정렬하므로 Deadlock 발생하지 않음
-      const concurrentRequests = Array.from({ length: 10 }, (_, i) =>
-        orm.em.fork().transactional(async (em) => {
-          const stockRepository = new StockRepository(em);
-          const stockService = new StockService(stockRepository);
-          const transaction = new DeductStockTransaction(stockService);
+      const concurrentRequests = Array.from({ length: 10 }, (_, i) => {
+        // 요청마다 순서를 다르게 (Deadlock 유발 시도)
+        const items =
+          i % 2 === 0
+            ? [
+                { productId: product1Id!, quantity: 1 },
+                { productId: product2Id!, quantity: 1 },
+              ]
+            : [
+                { productId: product2Id!, quantity: 1 },
+                { productId: product1Id!, quantity: 1 },
+              ];
 
-          // 요청마다 순서를 다르게 (Deadlock 유발 시도)
-          const items =
-            i % 2 === 0
-              ? [
-                  { productId: product1Id!, quantity: 1 },
-                  { productId: product2Id!, quantity: 1 },
-                ]
-              : [
-                  { productId: product2Id!, quantity: 1 },
-                  { productId: product1Id!, quantity: 1 },
-                ];
-
-          return transaction.execute({ items });
-        }),
-      );
+        return createDeductStockTransaction().execute({ items });
+      });
 
       // Then: 모든 요청이 성공해야 함 (Deadlock 없음)
       const results = await Promise.all(concurrentRequests);
 
       expect(results).toHaveLength(10);
       results.forEach((result) => {
-        expect(result.deductedItems).toHaveLength(2);
+        expect(result.successfulItems).toHaveLength(2);
+        expect(result.failedItems).toHaveLength(0);
       });
 
       // 최종 재고 확인
-      const finalStock1 = await orm.em.fork().findOne(ProductStock, {
+      const finalStock1 = await orm.em.fork().findOne(Stock, {
         productId: product1Id!,
       });
-      const finalStock2 = await orm.em.fork().findOne(ProductStock, {
+      const finalStock2 = await orm.em.fork().findOne(Stock, {
         productId: product2Id!,
       });
 
