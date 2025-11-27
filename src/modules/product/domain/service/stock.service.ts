@@ -1,26 +1,19 @@
 import {
   BadRequestException,
-  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ProductStock } from '../entity/product-stock.entity';
-import {
-  IStockRepository,
-  STOCK_REPOSITORY,
-} from '../interface/stock.repository.interface';
+import { Stock } from '../entity/stock.entity';
+import { StockRepository } from '../../infrastructure/stock.repository';
 
 @Injectable()
 export class StockService {
-  constructor(
-    @Inject(STOCK_REPOSITORY)
-    private readonly stockRepository: IStockRepository,
-  ) {}
+  constructor(private readonly stockRepository: StockRepository) {}
 
   // ==================== 조회 (Query) ====================
 
   // 재고 조회 (예외 발생)
-  async getStock(productId: string): Promise<ProductStock> {
+  async getStock(productId: string): Promise<Stock> {
     const stock = await this.stockRepository.findByProductId(productId);
 
     if (!stock) {
@@ -76,47 +69,33 @@ export class StockService {
   async createStock(
     productId: string,
     initialQuantity: number = 0,
-  ): Promise<ProductStock> {
-    return this.stockRepository.createStock(productId, initialQuantity);
+  ): Promise<Stock> {
+    const stock = Stock.create(initialQuantity);
+    stock.productId = productId;
+    return this.stockRepository.save(stock);
   }
 
   // ==================== 수정 (Update) ====================
 
-  // 재고 증가 (비관적 락 사용)
+  // 재고 증가
   async increaseStock(productId: string, quantity: number): Promise<void> {
     // 입력 검증
     if (quantity <= 0) {
       throw new BadRequestException('증가할 수량은 0보다 커야 합니다.');
     }
 
-    // Pessimistic Locking을 사용한 재고 증가
-    await this.stockRepository.increaseWithLock(productId, quantity);
+    // 재고 증가 (Repository에서 트랜잭션 처리)
+    await this.stockRepository.increase(productId, quantity);
   }
 
-  // 재고 감소 (비관적 락 사용 - SELECT FOR UPDATE)
+  // 재고 감소
   async decreaseStock(productId: string, quantity: number): Promise<void> {
     // 입력 검증
     if (quantity <= 0) {
       throw new BadRequestException('감소할 수량은 0보다 커야 합니다.');
     }
 
-    // Pessimistic Locking을 사용한 재고 감소
-    // Repository에서 락 획득, 검증, 감소를 원자적으로 처리
-    await this.stockRepository.decreaseWithLock(productId, quantity);
-  }
-
-  // 재고 증가 (비관적 락 사용 - 롤백/반품용)
-  async increaseStockWithLock(
-    productId: string,
-    quantity: number,
-  ): Promise<void> {
-    // 입력 검증
-    if (quantity <= 0) {
-      throw new BadRequestException('증가할 수량은 0보다 커야 합니다.');
-    }
-
-    // Pessimistic Locking을 사용한 재고 증가
-    // 롤백 시나리오에서 사용 - 반드시 성공해야 함
-    await this.stockRepository.increaseWithLock(productId, quantity);
+    // 재고 감소 (Repository에서 트랜잭션 처리)
+    await this.stockRepository.decrease(productId, quantity);
   }
 }
