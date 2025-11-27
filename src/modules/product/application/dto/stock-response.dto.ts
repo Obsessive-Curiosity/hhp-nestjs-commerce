@@ -1,4 +1,4 @@
-import { ProductStock } from '@/modules/product/domain/entity/product-stock.entity';
+import { Stock } from '@/modules/product/domain/entity/stock.entity';
 
 // 재고 정보
 export class StockResponseDto {
@@ -7,7 +7,7 @@ export class StockResponseDto {
   createdAt: Date;
   updatedAt: Date;
 
-  static from(stock: ProductStock): StockResponseDto {
+  static from(stock: Stock): StockResponseDto {
     const dto = new StockResponseDto();
     dto.productId = stock.productId;
     dto.quantity = stock.quantity;
