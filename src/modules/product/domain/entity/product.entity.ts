@@ -9,9 +9,14 @@ import {
   Cascade,
 } from '@mikro-orm/core';
 import { v7 as uuidv7 } from 'uuid';
-import { BadRequestException } from '@nestjs/common';
 import { Category } from '@/modules/category/domain/entity/category.entity';
-import { ProductStock } from './product-stock.entity';
+import { Stock } from './stock.entity';
+import {
+  DeletedProductException,
+  ProductAlreadyDeletedException,
+  ProductPricingRequiredException,
+  InvalidProductPricingException,
+} from '../exception';
 
 export type CreateProductProps = {
   categoryId: number;
@@ -23,7 +28,11 @@ export type CreateProductProps = {
 };
 
 @Entity()
-@Index({ name: 'fk_product_categoryId', properties: ['categoryId'] })
+@Index({ name: 'idx_product_updatedAt', properties: ['updatedAt'] })
+@Index({
+  name: 'idx_product_categoryId_updatedAt',
+  properties: ['categoryId', 'updatedAt'],
+})
 export class Product {
   @PrimaryKey({ type: t.character, length: 36 })
   id: string = uuidv7();
@@ -37,11 +46,11 @@ export class Product {
   })
   category!: Category;
 
-  @OneToOne(() => ProductStock, {
+  @OneToOne(() => Stock, {
     cascade: [Cascade.REMOVE],
     orphanRemoval: true,
   })
-  stock!: ProductStock;
+  stock!: Stock;
 
   @Property()
   name!: string;
@@ -124,7 +133,7 @@ export class Product {
     imageUrl?: string | null;
   }): void {
     if (this.isDeleted()) {
-      throw new BadRequestException('삭제된 상품은 수정할 수 없습니다.');
+      throw new DeletedProductException();
     }
 
     if (params.name) {
@@ -155,7 +164,7 @@ export class Product {
   // Soft Delete
   softDelete(): void {
     if (this.isDeleted()) {
-      throw new BadRequestException('이미 삭제된 상품입니다.');
+      throw new ProductAlreadyDeletedException();
     }
     this.deletedAt = new Date();
   }
@@ -166,17 +175,13 @@ export class Product {
   private validatePricing(): void {
     // 소매가 또는 도매가 중 최소 하나는 있어야 함
     if (this.retailPrice === null && this.wholesalePrice === null) {
-      throw new BadRequestException(
-        '소매가 또는 도매가 중 최소 하나는 입력해야 합니다.',
-      );
+      throw new ProductPricingRequiredException();
     }
 
     // 둘 다 있을 경우, 도매가가 소매가보다 낮아야 함
     if (this.retailPrice !== null && this.wholesalePrice !== null) {
       if (this.wholesalePrice >= this.retailPrice) {
-        throw new BadRequestException(
-          'B2B 가격(도매가)은 B2C 가격(소매가)보다 낮아야 합니다.',
-        );
+        throw new InvalidProductPricingException();
       }
     }
   }

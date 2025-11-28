@@ -132,6 +132,9 @@ importers:
       '@testcontainers/mysql':
         specifier: ^11.8.1
         version: 11.8.1
+      '@testcontainers/redis':
+        specifier: ^11.8.1
+        version: 11.8.1
       '@types/bcrypt':
         specifier: ^6.0.0
         version: 6.0.0
@@ -147,6 +150,9 @@ importers:
       '@types/jsonwebtoken':
         specifier: ^9.0.10
         version: 9.0.10
+      '@types/k6':
+        specifier: ^1.4.0
+        version: 1.4.0
       '@types/node':
         specifier: ^22.18.12
         version: 22.18.12
@@ -1248,6 +1254,9 @@ packages:
   '@testcontainers/mysql@11.8.1':
     resolution: {integrity: sha512-FhlaFo2RKhDe0i1EnVwoASZnHm2h1gvliUGv5TTU0cUlAX8fpiFe/o286tm22EGTBwFGJKuyrVK4NLElrZWilA==}
 
+  '@testcontainers/redis@11.8.1':
+    resolution: {integrity: sha512-mkcOsPkVvdG7AMZjvWpBlfDoncqFJRRur5mTOmlgFpaK7ISpUpOAGcyOmZ7Da8kdHLE5I3iJoT6cHgsD2LjxqA==}
+
   '@tokenizer/inflate@0.2.7':
     resolution: {integrity: sha512-MADQgmZT1eKjp06jpI2yozxaU9uVs4GzzgSL+uEq7bVcJ9V1ZXQkeGNql1fsSI0gMy1vhvNTNbUqrx+pZfJVmg==}
     engines: {node: '>=18'}
@@ -1348,6 +1357,9 @@ packages:
 
   '@types/jsonwebtoken@9.0.10':
     resolution: {integrity: sha512-asx5hIG9Qmf/1oStypjanR7iKTv0gXQ1Ov/jfrX6kS/EO0OFni8orbmGCn0672NHR3kXHwpAwR+B368ZGN/2rA==}
+
+  '@types/k6@1.4.0':
+    resolution: {integrity: sha512-2tgKVnzNXZTZT1TDAGLY/3cuvHPZLyOF751N7M8T2dBgWzInzUVZYjGn9zVW01S1yNLqAr1az9gctyJHTW6GRQ==}
 
   '@types/methods@1.1.4':
     resolution: {integrity: sha512-ymXWVrDiCxTBE3+RIrrP533E70eA+9qu7zdWoHuOmGujkYtzf4HQF96b8nwHLqhuf4ykX61IGRIB38CC6/sImQ==}
@@ -5639,6 +5651,15 @@ snapshots:
       - react-native-b4a
       - supports-color
 
+  '@testcontainers/redis@11.8.1':
+    dependencies:
+      testcontainers: 11.8.1
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - react-native-b4a
+      - supports-color
+
   '@tokenizer/inflate@0.2.7':
     dependencies:
       debug: 4.4.3
@@ -5772,6 +5793,8 @@ snapshots:
     dependencies:
       '@types/ms': 2.1.0
       '@types/node': 22.18.12
+
+  '@types/k6@1.4.0': {}
 
   '@types/methods@1.1.4': {}
 

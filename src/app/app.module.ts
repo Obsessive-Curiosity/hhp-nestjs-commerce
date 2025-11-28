@@ -22,11 +22,13 @@ import { CouponModule } from '@/modules/coupon/infrastructure/coupon.module';
 import { WalletModule } from '@/modules/wallet/infrastructure/wallet.module';
 import { OrderModule } from '@/modules/order/infrastructure/order.module';
 import { MikroOrmModule } from '@/common/database/mikro-orm.module';
+import { LockModule } from '@/common/lock/lock.module';
 
 @Module({
   imports: [
     ConfigModule,
     RedisModule,
+    LockModule,
     MikroOrmModule,
     JwtModule.register({ global: true }),
     AuthModule,

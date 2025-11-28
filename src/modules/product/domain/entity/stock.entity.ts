@@ -1,8 +1,12 @@
 import { Entity, PrimaryKey, Property, t } from '@mikro-orm/core';
-import { BadRequestException } from '@nestjs/common';
+import {
+  InvalidInitialStockException,
+  InvalidStockQuantityException,
+  InsufficientStockException,
+} from '../exception';
 
 @Entity()
-export class ProductStock {
+export class Stock {
   // Product ID (외래 키이자 기본 키)
   @PrimaryKey({ type: t.character, length: 36 })
   productId!: string;
@@ -25,7 +29,7 @@ export class ProductStock {
 
   // =================== Constructor ===================
 
-  protected constructor(data?: Partial<ProductStock>) {
+  protected constructor(data?: Partial<Stock>) {
     if (data) {
       Object.assign(this, data);
     }
@@ -34,12 +38,12 @@ export class ProductStock {
   // ================== Factory (생성) ==================
 
   // Factory 메서드: 신규 재고 생성
-  static create(initialQuantity: number = 0): ProductStock {
+  static create(initialQuantity: number = 0): Stock {
     if (initialQuantity < 0) {
-      throw new BadRequestException('초기 재고는 0 이상이어야 합니다.');
+      throw new InvalidInitialStockException();
     }
 
-    const stock = new ProductStock();
+    const stock = new Stock();
     stock.quantity = initialQuantity;
 
     return stock;
@@ -62,13 +66,11 @@ export class ProductStock {
   // 재고 감소
   decrease(quantity: number): void {
     if (quantity <= 0) {
-      throw new BadRequestException('감소할 수량은 0보다 커야 합니다.');
+      throw new InvalidStockQuantityException('decrease');
     }
 
     if (this.quantity < quantity) {
-      throw new BadRequestException(
-        `재고가 부족합니다. 현재 재고: ${this.quantity}, 요청 수량: ${quantity}`,
-      );
+      throw new InsufficientStockException(this.quantity, quantity);
     }
 
     this.quantity -= quantity;
@@ -77,7 +79,7 @@ export class ProductStock {
   // 재고 증가
   increase(quantity: number): void {
     if (quantity <= 0) {
-      throw new BadRequestException('증가할 수량은 0보다 커야 합니다.');
+      throw new InvalidStockQuantityException('increase');
     }
 
     this.quantity += quantity;

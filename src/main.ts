@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from '@/app/app.module';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { NextFunction, Request, Response } from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -14,6 +15,22 @@ async function bootstrap() {
   const port = configService.get<number>('PORT') ?? 3000;
   const env = configService.get<string>('NODE_ENV') || 'development';
   const isDevelopment = env === 'development';
+
+  // 요청 타임아웃 설정 (성능 최적화)
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    // 요청 타임아웃 (30초)
+    req.setTimeout(30000, () => {
+      logger.warn(`Request timeout: ${req.method} ${req.url}`);
+      res.status(408).send({ message: 'Request Timeout' });
+    });
+
+    // 응답 타임아웃 (30초)
+    res.setTimeout(30000, () => {
+      logger.warn(`Response timeout: ${req.method} ${req.url}`);
+    });
+
+    next();
+  });
 
   // Start server
   await app.listen(port);

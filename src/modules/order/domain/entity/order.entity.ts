@@ -13,8 +13,11 @@ export enum OrderStatus {
 }
 
 @Entity({ tableName: 'order' })
-@Index({ name: 'fk_order_userId', properties: ['userId'] })
 @Index({ name: 'fk_order_usedCouponId', properties: ['usedCouponId'] })
+@Index({
+  name: 'idx_order_userId_createdAt',
+  properties: ['userId', 'createdAt'],
+})
 export class Order {
   @PrimaryKey({ type: t.character, length: 36 })
   id: string = uuidv7();

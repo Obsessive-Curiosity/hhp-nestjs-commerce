@@ -124,18 +124,47 @@ export class ProcessPaymentUseCase {
         orderItems: calculatedItems,
       });
 
-    // ==================== 3. 재고 차감 (트랜잭션 + 보상 트랜잭션) ====================
+    // ==================== 3. 재고 차감 (부분 성공 패턴) ====================
     const deductItems = createdOrderItems.map((item) => ({
       productId: item.productId,
       quantity: item.quantity,
     }));
 
+    let successfulItems: typeof deductItems = [];
+    let failedItems: Array<{ item: typeof deductItems[0]; error: Error }> = [];
+
     try {
-      await this.deductStockTransaction.execute({ items: deductItems });
+      const result = await this.deductStockTransaction.execute({
+        items: deductItems,
+      }); // 분산락 재고 차감 트랜잭션
+      successfulItems = result.successfulItems;
+      failedItems = result.failedItems;
     } catch (error) {
-      // 보상 트랜잭션: 재고 차감 실패 시 생성된 주문 삭제
+      // 락 타임아웃(3회 재시도 후 실패) 등으로 전체 실패 시
+      // 주문 삭제
       await this.deleteOrderRollback.execute(order);
-      throw error;
+      throw error; // 원래 에러 재던지기
+    }
+
+    // 실패한 상품이 하나라도 있으면 전체 롤백
+    if (failedItems.length > 0) {
+      // 성공한 재고 복구
+      if (successfulItems.length > 0) {
+        await this.restoreStockTransaction.execute({
+          items: successfulItems,
+        }); // 분산락 재고 복구 트랜잭션
+      }
+
+      // 주문 삭제
+      await this.deleteOrderRollback.execute(order);
+
+      // 품절된 상품 정보와 함께 에러 던지기
+      const outOfStockProductIds = failedItems.map((f) => f.item.productId);
+      throw new NotFoundException({
+        code: 'OUT_OF_STOCK',
+        message: '일부 상품의 재고가 부족합니다.',
+        outOfStockProductIds,
+      });
     }
 
     // ==================== 4. 결제 처리 (지갑 + 쿠폰 + 상태 변경 = 하나의 트랜잭션) ====================

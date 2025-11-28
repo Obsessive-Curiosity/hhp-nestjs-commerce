@@ -14,6 +14,24 @@ export default defineConfig({
   // MikroORM 드라이버 설정
   driver: MySqlDriver,
 
+  // 커넥션 풀 설정 (성능 최적화)
+  pool: {
+    min: 5, // 최소 연결 수 (항상 유지)
+    max: 50, // 최대 연결 수 (동시 처리 가능한 요청 수)
+    acquireTimeoutMillis: 30000, // 연결 획득 타임아웃 (30초)
+    idleTimeoutMillis: 600000, // 유휴 연결 제거 시간 (10분)
+  },
+
+  // 쿼리 타임아웃 설정
+  driverOptions: {
+    connection: {
+      timezone: '+09:00', // 한국 시간대
+      connectTimeout: 10000, // 연결 타임아웃 (10초)
+      // MySQL 세션 타임아웃 설정
+      waitForConnections: true,
+    },
+  },
+
   // 엔티티 경로 설정
   entities: ['dist/**/*.entity.js'],
   entitiesTs: ['src/**/*.entity.ts'],
@@ -32,14 +50,14 @@ export default defineConfig({
     softDelete: {
       cond: { deletedAt: null },
       default: true,
-      entity: ['User'], // soft delete를 사용하는 엔티티 목록
+      entity: ['User', 'Product'], // soft delete를 사용하는 엔티티 목록
     },
   },
 
   // 마이그레이션 설정
   migrations: {
-    path: './src/database/migrations',
-    pathTs: './src/database/migrations',
+    path: './src/common/database/migrations',
+    pathTs: './src/common/database/migrations',
     tableName: 'mikro_orm_migrations',
     transactional: true,
   },

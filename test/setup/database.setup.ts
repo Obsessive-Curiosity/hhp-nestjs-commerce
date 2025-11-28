@@ -7,7 +7,7 @@ import { MySqlContainer, StartedMySqlContainer } from '@testcontainers/mysql';
 // 재고 테스트에 필요한 최소 엔티티만 포함
 import { Category } from '../../src/modules/category/domain/entity/category.entity';
 import { Product } from '../../src/modules/product/domain/entity/product.entity';
-import { ProductStock } from '../../src/modules/product/domain/entity/product-stock.entity';
+import { Stock } from '../../src/modules/product/domain/entity/stock.entity';
 
 export interface TestDatabase {
   orm: MikroORM<MySqlDriver>;
@@ -41,7 +41,7 @@ export async function setupTestDatabase(): Promise<TestDatabase> {
     password: container.getUserPassword(),
     dbName: container.getDatabase(),
     driver: MySqlDriver,
-    entities: [Category, Product, ProductStock],
+    entities: [Category, Product, Stock],
     metadataProvider: TsMorphMetadataProvider,
     debug: false, // 테스트 시 SQL 로그 최소화
     allowGlobalContext: true,
@@ -88,7 +88,7 @@ export async function clearTestData(orm: MikroORM): Promise<void> {
   const em = orm.em.fork();
 
   // 외래키 제약조건 때문에 순서가 중요
-  await em.nativeDelete(ProductStock, {});
+  await em.nativeDelete(Stock, {});
   await em.nativeDelete(Product, {});
   await em.nativeDelete(Category, {});
 
