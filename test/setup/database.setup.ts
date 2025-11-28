@@ -5,9 +5,9 @@ import { MySqlContainer, StartedMySqlContainer } from '@testcontainers/mysql';
 
 // 엔티티 import (상대 경로 사용)
 // 재고 테스트에 필요한 최소 엔티티만 포함
-import { Category } from '../../src/category/domain/entity/category.entity';
-import { Product } from '../../src/product/domain/entity/product.entity';
-import { ProductStock } from '../../src/product/domain/entity/product-stock.entity';
+import { Category } from '../../src/modules/category/domain/entity/category.entity';
+import { Product } from '../../src/modules/product/domain/entity/product.entity';
+import { ProductStock } from '../../src/modules/product/domain/entity/product-stock.entity';
 
 export interface TestDatabase {
   orm: MikroORM<MySqlDriver>;

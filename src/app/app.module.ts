@@ -7,21 +7,21 @@ import {
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule } from '@/config/config.module';
-import { RedisModule } from '@/redis/redis.module';
-import { AuthModule } from '@/auth/auth.module';
-import { UserModule } from '@/user/infrastructure/user.module';
-import { BearerTokenMiddleware } from '@/auth/middlewares/bearer-token.middleware';
+import { RedisModule } from '@/common/cache/redis.module';
+import { AuthModule } from '@/modules/auth/auth.module';
+import { UserModule } from '@/modules/user/infrastructure/user.module';
+import { BearerTokenMiddleware } from '@/modules/auth/middlewares/bearer-token.middleware';
 import { JwtModule } from '@nestjs/jwt';
 import { APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { ZodValidationPipe } from 'nestjs-zod';
-import { CategoryModule } from '@/category/infrastructure/category.module';
-import { RbacGuard } from '@/auth/guards/rbac.guard';
-import { ProductModule } from '@/product/infrastructure/product.module';
-import { CartModule } from '@/cart/infrastructure/cart.module';
-import { CouponModule } from '@/coupon/infrastructure/coupon.module';
-import { WalletModule } from '@/wallet/infrastructure/wallet.module';
-import { OrderModule } from '@/order/infrastructure/order.module';
-import { MikroOrmModule } from '@/mikro-orm/mikro-orm.module';
+import { CategoryModule } from '@/modules/category/infrastructure/category.module';
+import { RbacGuard } from '@/modules/auth/guards/rbac.guard';
+import { ProductModule } from '@/modules/product/infrastructure/product.module';
+import { CartModule } from '@/modules/cart/infrastructure/cart.module';
+import { CouponModule } from '@/modules/coupon/infrastructure/coupon.module';
+import { WalletModule } from '@/modules/wallet/infrastructure/wallet.module';
+import { OrderModule } from '@/modules/order/infrastructure/order.module';
+import { MikroOrmModule } from '@/common/database/mikro-orm.module';
 
 @Module({
   imports: [
